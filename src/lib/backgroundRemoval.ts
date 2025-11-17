@@ -23,13 +23,13 @@ export async function removeBackground(
   }
 ): Promise<BackgroundRemovalResult> {
   try {
-    const apiKey = process.env.WITHOUTBG_API_KEY;
+    const apiKey = process.env.REMOVEBG_API_KEY;
 
     if (!apiKey) {
-      throw new Error('WithoutBG API key not configured');
+      throw new Error('Remove.bg API key not configured. Get one at https://www.remove.bg/api');
     }
 
-    // Convert image to base64 if it's a File
+    // Convert image to base64 or get data URL
     let imageData: string;
     if (imageFile instanceof File) {
       imageData = await fileToBase64(imageFile);
@@ -37,32 +37,44 @@ export async function removeBackground(
       imageData = imageFile;
     }
 
-    // Call WithoutBG API
-    const response = await fetch('https://api.without.bg/v1/remove', {
+    // Remove data URL prefix if present
+    const base64Image = imageData.includes('base64,')
+      ? imageData.split('base64,')[1]
+      : imageData;
+
+    // Call Remove.bg API
+    const formData = new FormData();
+    formData.append('image_file_b64', base64Image);
+    formData.append('size', options?.size || 'auto');
+
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'X-Api-Key': apiKey,
       },
-      body: JSON.stringify({
-        image: imageData,
-        format: options?.format || 'png',
-        size: options?.size || 'medium'
-      }),
+      body: formData,
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(errorData?.message || `API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Remove.bg API error:', errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
+    // Convert response blob to base64
+    const blob = await response.blob();
+    const reader = new FileReader();
 
-    return {
-      success: true,
-      imageUrl: result.image_url,
-      imageData: result.image_data,
-    };
+    return new Promise((resolve) => {
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        resolve({
+          success: true,
+          imageData: base64data,
+        });
+      };
+      reader.readAsDataURL(blob);
+    });
   } catch (error) {
     console.error('Background removal error:', error);
     return {
