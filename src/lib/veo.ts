@@ -1,19 +1,43 @@
-import { PaletteEntry } from './anthropic';
-import { CreativeCustomizations } from './agents';
+import type {
+  GenerateVideosConfig,
+  GenerateVideosOperation,
+  GenerateVideosParameters,
+  Video,
+} from '@google/genai';
+import type { PaletteEntry } from './anthropic';
+import type { CreativeCustomizations } from './agents';
+
+type VideoGenerationOptions = {
+  aspectRatio?: '9:16' | '16:9' | '1:1';
+  resolution?: '720p' | '1080p';
+  duration?: 'short' | 'medium' | 'long';
+  style?: 'cinematic' | 'artistic' | 'social' | 'professional';
+};
+
+type VeoClient = {
+  models: {
+    generateVideos: (params: GenerateVideosParameters) => Promise<GenerateVideosOperation>;
+  };
+  operations: {
+    getVideosOperation: (params: { operation: GenerateVideosOperation }) => Promise<GenerateVideosOperation>;
+  };
+};
 
 // Veo 3 Video Generation Service
 export class VeoVideoService {
-  private static client: any = null;
+  private static client: VeoClient | null = null;
 
-  static async initializeClient() {
-    if (!process.env.GOOGLE_API_KEY) {
-      throw new Error('Missing GOOGLE_API_KEY environment variable');
+  static async initializeClient(): Promise<VeoClient> {
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      throw new Error('Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable');
     }
 
     if (!this.client) {
       // Dynamic import to avoid issues with server-side rendering
-      const { genai } = await import('@google/genai');
-      this.client = genai.Client();
+      const { GoogleGenAI } = await import('@google/genai');
+      this.client = new GoogleGenAI({
+        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY
+      }) as VeoClient;
     }
     
     return this.client;
@@ -21,69 +45,90 @@ export class VeoVideoService {
 
   static async generateVideo(
     prompt: string,
-    options: {
-      aspectRatio?: '9:16' | '16:9' | '1:1';
-      resolution?: '720p' | '1080p';
-      duration?: 'short' | 'medium' | 'long';
-      style?: 'cinematic' | 'artistic' | 'social' | 'professional';
-    } = {}
+    options: VideoGenerationOptions = {}
   ): Promise<string | null> {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🎬 MOCK VIDEO: Using mock video for development');
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate generation time
-      return '/mock-video.mp4';
-    }
-
     try {
       const client = await this.initializeClient();
-      
-      const { types } = await import('@google/genai');
-      
       // Build enhanced prompt with technical specifications
       const enhancedPrompt = this.buildEnhancedPrompt(prompt, options);
-      
-      // Build negative prompt for quality
       const negativePrompt = this.buildNegativePrompt(options.style || 'cinematic');
+      const modelName = process.env.GOOGLE_VEO_VIDEO_MODEL || 'veo-2.0-generate-001';
+      const config = this.buildVideoConfig(options, negativePrompt);
+      
+      console.log('🎬 Generating video with Veo:', enhancedPrompt.substring(0, 100) + '...');
 
-      console.log('🎬 Generating video with Veo 3:', enhancedPrompt.substring(0, 100) + '...');
-
-      const operation = await client.models.generate_videos({
-        model: "veo-3.0-fast-generate-001",
-        prompt: enhancedPrompt,
-        config: types.GenerateVideosConfig({
-          negative_prompt: negativePrompt,
-          aspect_ratio: options.aspectRatio || "9:16",
-          resolution: options.resolution || "720p"
-        })
+      const operation = await client.models.generateVideos({
+        model: modelName,
+        source: {
+          prompt: enhancedPrompt
+        },
+        config
       });
+      const completedOperation = await this.pollForVideo(client, operation);
+      const videoData = completedOperation.response?.generatedVideos?.[0]?.video;
 
-      // Wait for video generation to complete
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-        const updatedOperation = await client.operations.get(operation);
-        Object.assign(operation, updatedOperation);
-        console.log('🎬 Video generation progress...', operation.metadata?.progress || 'Processing');
+      if (!videoData) {
+        console.warn('No video returned from Veo generation');
+        return null;
       }
 
-      if (operation.response?.generated_videos?.length > 0) {
-        const generatedVideo = operation.response.generated_videos[0];
-        
-        // Download and return the video URL or base64
-        const videoFile = await client.files.download({ file: generatedVideo.video });
-        
-        // For now, we'll return a placeholder - in production this would be uploaded to cloud storage
-        console.log('✅ Video generated successfully');
-        return `data:video/mp4;base64,${Buffer.from(videoFile).toString('base64')}`;
-      }
-
-      return null;
+      return this.normalizeVideoUrl(videoData);
     } catch (error) {
       console.error('Error generating video:', error);
       throw error;
     }
   }
 
-  static buildEnhancedPrompt(basePrompt: string, options: any): string {
+  private static buildVideoConfig(options: VideoGenerationOptions, negativePrompt: string): GenerateVideosConfig {
+    const aspectRatio = options.aspectRatio || '9:16';
+    const durationSeconds = this.mapDurationToSeconds(options.duration || 'short');
+
+    return {
+      numberOfVideos: 1,
+      aspectRatio,
+      durationSeconds,
+      negativePrompt
+    };
+  }
+
+  private static async pollForVideo(
+    client: VeoClient,
+    operation: GenerateVideosOperation,
+    timeoutMs = 240000,
+    pollIntervalMs = 5000
+  ): Promise<GenerateVideosOperation> {
+    let currentOperation = operation;
+    const start = Date.now();
+
+    while (!currentOperation.done) {
+      if (Date.now() - start > timeoutMs) {
+        throw new Error('Video generation timed out');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      currentOperation = await client.operations.getVideosOperation({ operation: currentOperation });
+    }
+
+    if (currentOperation.error) {
+      throw new Error(`Video generation failed: ${JSON.stringify(currentOperation.error)}`);
+    }
+
+    return currentOperation;
+  }
+
+  private static mapDurationToSeconds(duration: VideoGenerationOptions['duration']): number {
+    switch (duration) {
+      case 'medium':
+        return 6;
+      case 'long':
+        return 8;
+      case 'short':
+      default:
+        return 5;
+    }
+  }
+
+  static buildEnhancedPrompt(basePrompt: string, options: VideoGenerationOptions): string {
     const aspectRatio = options.aspectRatio || '9:16';
     const style = options.style || 'cinematic';
     
@@ -109,19 +154,37 @@ export class VeoVideoService {
     let durationText = '';
     switch (duration) {
       case 'short':
-        durationText = 'EXACTLY 3 SECONDS LONG. BRIEF DURATION. SHORT VIDEO CLIP. ';
+        durationText = 'EXACTLY 5 SECONDS LONG. BRIEF DURATION. SHORT VIDEO CLIP. ';
         break;
       case 'medium':
         durationText = 'EXACTLY 6 SECONDS LONG. MEDIUM DURATION. ';
         break;
       case 'long':
-        durationText = 'EXACTLY 10-15 SECONDS LONG. LONGER DURATION. ';
+        durationText = 'EXACTLY 8 SECONDS LONG. LONGER DURATION. ';
         break;
     }
 
     const suffix = 'No text overlay, no subtitles, no watermarks. High quality, smooth motion.';
 
     return `${prefix}${basePrompt} ${durationText}${suffix}`;
+  }
+
+  private static normalizeVideoUrl(video: Video): string | null {
+    if (video.videoBytes) {
+      const mimeType = video.mimeType || 'video/mp4';
+      return `data:${mimeType};base64,${video.videoBytes}`;
+    }
+
+    if (video.uri) {
+      const fileIdMatch = video.uri.match(/files\/([^:]+):/);
+      if (fileIdMatch?.[1]) {
+        return `/api/video/${fileIdMatch[1]}`;
+      }
+      return video.uri;
+    }
+
+    console.warn('Video response did not include uri or bytes');
+    return null;
   }
 
   static buildNegativePrompt(style: string): string {
@@ -146,16 +209,17 @@ export class VeoVideoService {
     palette: PaletteEntry[],
     customizations: CreativeCustomizations,
     format: 'single' | 'series',
-    imageAngle: string
+    imageAngle: string,
+    aspectRatio: '9:16' | '16:9' | '1:1' = '9:16'
   ): Promise<{ video_url?: string; series_urls?: string[]; ideas: string }> {
     try {
       // Build domain-specific video prompt
       const videoPrompt = this.buildDomainVideoPrompt(domain, palette, customizations, imageAngle);
-      
+
       if (format === 'single') {
         // Generate single video
         const videoUrl = await this.generateVideo(videoPrompt, {
-          aspectRatio: '9:16',
+          aspectRatio,
           resolution: '720p',
           duration: 'short',
           style: 'cinematic'
@@ -173,12 +237,12 @@ export class VeoVideoService {
         for (let i = 0; i < seriesPrompts.length; i++) {
           console.log(`🎬 Generating series part ${i + 1}/${seriesPrompts.length}`);
           const videoUrl = await this.generateVideo(seriesPrompts[i], {
-            aspectRatio: '9:16',
+            aspectRatio,
             resolution: '720p',
             duration: 'short',
             style: 'cinematic'
           });
-          
+
           if (videoUrl) {
             seriesUrls.push(videoUrl);
           }
@@ -324,20 +388,23 @@ export class VeoVideoService {
 
   static buildMakeupVideoPrompt(colors: string, dominant: string, accent: string, context: string, angle: string): string {
     const contextText = context ? ` ${context}.` : '';
+    const angleText = angle ? ` Shot focus: ${angle}.` : '';
     
-    return `Professional makeup video.${contextText} Beautiful makeup application showcasing colors ${colors}, emphasizing ${dominant} with ${accent} accents. Beauty cinematography, perfect lighting.`;
+    return `Professional makeup video.${contextText}${angleText} Beautiful makeup application showcasing colors ${colors}, emphasizing ${dominant} with ${accent} accents. Beauty cinematography, perfect lighting.`;
   }
 
   static buildEventVideoPrompt(colors: string, dominant: string, accent: string, context: string, angle: string): string {
     const contextText = context ? ` ${context}.` : '';
+    const angleText = angle ? ` Shot focus: ${angle}.` : '';
     
-    return `Event design video.${contextText} Beautiful event setup featuring color palette ${colors}. Professional event cinematography, elegant atmosphere.`;
+    return `Event design video.${contextText}${angleText} Beautiful event setup featuring color palette ${colors}. Professional event cinematography, elegant atmosphere.`;
   }
 
   static buildDesignVideoPrompt(colors: string, dominant: string, accent: string, context: string, angle: string): string {
     const contextText = context ? ` ${context}.` : '';
+    const angleText = angle ? ` Shot focus: ${angle}.` : '';
     
-    return `Design concept video.${contextText} Modern graphic design elements featuring colors ${colors}. Professional motion graphics style, clean composition.`;
+    return `Design concept video.${contextText}${angleText} Modern graphic design elements featuring colors ${colors}. Professional motion graphics style, clean composition.`;
   }
 
   static buildSeriesPrompts(domain: string, palette: PaletteEntry[], customizations: CreativeCustomizations): string[] {

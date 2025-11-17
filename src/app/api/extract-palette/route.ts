@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
     console.log('✅ Successfully extracted palette:', palette);
     return NextResponse.json(palette);
   } catch (error) {
-    console.error('💥 Error in extract-palette API:', error);
+    console.error('💥 Error in extract-palette API:', JSON.stringify(error, null, 2));
     return NextResponse.json(
-      { error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { error: 'Internal Server Error', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

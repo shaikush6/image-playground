@@ -60,7 +60,8 @@ Ensure colors are vibrant and true to the description.`;
     domain: string,
     prompt: string,
     palette: Array<{ hex: string; name: string; suggested_role: string }>,
-    imageAngle: string
+    imageAngle: string,
+    aspectRatio: '1:1' | '16:9' | '9:16' = '1:1'
   ): Promise<string | null> {
     const paletteColors = palette.map(p => p.name).join(', ');
     const dominantColor = palette.find(p => p.suggested_role.includes('Dominant'))?.name || palette[0]?.name;
@@ -68,12 +69,10 @@ Ensure colors are vibrant and true to the description.`;
 
     let domainSpecificPrompt = '';
     let style: 'photorealistic' | 'artistic' | 'minimal' | 'vibrant' = 'photorealistic';
-    let aspectRatio: '1:1' | '16:9' | '9:16' = '1:1';
 
     switch (domain) {
       case '🍽️ Cooking':
         style = 'photorealistic';
-        aspectRatio = '1:1';
         switch (imageAngle) {
           case 'Dish Plated':
             domainSpecificPrompt = `Professional food photography of ${prompt}. Beautiful plating on elegant dishware. Colors emphasizing ${dominantColor} tones with ${accentColor} accents. Cinematic lighting, shallow depth of field, appetizing presentation.`;
@@ -93,13 +92,11 @@ Ensure colors are vibrant and true to the description.`;
 
       case '👗 Fashion':
         style = 'photorealistic';
-        aspectRatio = '9:16';
         switch (imageAngle) {
           case 'Full Outfit Look':
             domainSpecificPrompt = `High fashion photography of complete outfit inspired by ${prompt}. Model wearing coordinated pieces in colors: ${paletteColors}. Professional fashion photography, clean background.`;
             break;
           case 'Flat Lay Styling':
-            aspectRatio = '1:1';
             domainSpecificPrompt = `Luxury fashion flat lay styling of ${prompt}. Arranged on marble surface, using color palette: ${paletteColors}. High-end fashion photography style.`;
             break;
           case 'Fabric/Detail Focus':
@@ -114,13 +111,11 @@ Ensure colors are vibrant and true to the description.`;
 
       case '🛋️ Interior Design':
         style = 'photorealistic';
-        aspectRatio = '16:9';
         switch (imageAngle) {
           case 'Room Perspective View':
             domainSpecificPrompt = `Stunning interior design photography of ${prompt}. Wide angle room view showcasing color scheme: ${paletteColors}. Professional architectural photography, natural lighting.`;
             break;
           case 'Mood Board / Style Tile':
-            aspectRatio = '1:1';
             style = 'artistic';
             domainSpecificPrompt = `Interior design mood board for ${prompt}. Collage style showing materials, textures, and colors: ${paletteColors}. Design presentation style.`;
             break;
@@ -136,7 +131,6 @@ Ensure colors are vibrant and true to the description.`;
 
       case '🎨 Art/Craft':
         style = 'artistic';
-        aspectRatio = '1:1';
         switch (imageAngle) {
           case 'Finished Artwork':
             domainSpecificPrompt = `Completed artwork inspired by ${prompt}. Fine art piece featuring color palette: ${paletteColors}. Gallery lighting, artistic composition.`;
@@ -157,7 +151,6 @@ Ensure colors are vibrant and true to the description.`;
 
       case '💄 Makeup':
         style = 'photorealistic';
-        aspectRatio = '1:1';
         switch (imageAngle) {
           case 'Close-up Beauty Shot':
             domainSpecificPrompt = `Professional beauty photography close-up of ${prompt}. Flawless makeup featuring colors: ${paletteColors}. Studio lighting, high detail.`;
@@ -178,17 +171,14 @@ Ensure colors are vibrant and true to the description.`;
 
       case '🎉 Event Theme':
         style = 'photorealistic';
-        aspectRatio = '16:9';
         switch (imageAngle) {
           case 'Table Setting Detail':
-            aspectRatio = '1:1';
             domainSpecificPrompt = `Elegant table setting detail for ${prompt}. Luxury event styling using color scheme: ${paletteColors}. Professional event photography.`;
             break;
           case 'Overall Venue Atmosphere':
             domainSpecificPrompt = `Wide shot of event venue decorated for ${prompt}. Atmospheric lighting, full decoration scheme in colors: ${paletteColors}. Event photography.`;
             break;
           case 'Decor Vignette':
-            aspectRatio = '1:1';
             domainSpecificPrompt = `Beautiful decorative vignette for ${prompt}. Styled detail shot featuring color palette: ${paletteColors}. Event styling photography.`;
             break;
           case 'Invitation Suite Mockup':
@@ -199,7 +189,6 @@ Ensure colors are vibrant and true to the description.`;
 
       case '🌐 Graphic/Web Design':
         style = 'minimal';
-        aspectRatio = '16:9';
         switch (imageAngle) {
           case 'UI Mockup (Website/App)':
             domainSpecificPrompt = `Modern website/app UI mockup for ${prompt}. Clean interface design using color palette: ${paletteColors}. Contemporary web design, minimal aesthetic.`;
@@ -209,7 +198,6 @@ Ensure colors are vibrant and true to the description.`;
             break;
           case 'Abstract Color Background':
             style = 'artistic';
-            aspectRatio = '1:1';
             domainSpecificPrompt = `Abstract geometric background design for ${prompt}. Modern gradient and shape composition using colors: ${paletteColors}. Digital art style.`;
             break;
           case 'Style Guide Snippet':

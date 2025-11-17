@@ -199,6 +199,26 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
 
   CreativeInput.displayName = 'CreativeInput';
 
+  // Universal Color Balance options (applies to all creative paths)
+  const colorBalanceOptions: CustomOption[] = [
+    { label: "Balanced", value: "Balanced", icon: "⚖️", description: "Equal use of all palette colors" },
+    { label: "Warm Emphasis", value: "Warm Emphasis", icon: "🔥", description: "Favor warmer colors from palette" },
+    { label: "Cool Emphasis", value: "Cool Emphasis", icon: "❄️", description: "Favor cooler colors from palette" },
+    { label: "Bright Emphasis", value: "Bright Emphasis", icon: "✨", description: "Favor brighter, more saturated colors" },
+    { label: "Dark Emphasis", value: "Dark Emphasis", icon: "🌙", description: "Favor darker, muted colors" },
+  ];
+
+  const ColorBalanceSelector = () => (
+    <DynamicSelect
+      label="Color Balance"
+      value={customizations.color_balance || "Balanced"}
+      onValueChange={(value) => updateCustomization('color_balance', value)}
+      options={colorBalanceOptions}
+      icon={<span className="text-2xl">🎨</span>}
+      description="Control the emphasis and ratio of colors from your extracted palette"
+    />
+  );
+
   const renderCookingCustomizations = () => {
 
     const dishTypeOptions: CustomOption[] = [
@@ -244,6 +264,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Dairy-Free", value: "Dairy-Free", icon: "🥛" },
       { label: "Nut-Free", value: "Nut-Free", icon: "🥜" },
       { label: "Low-Carb", value: "Low-Carb", icon: "🥩" }
+    ];
+
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
     ];
 
     return (
@@ -301,6 +327,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
               description="Select any dietary restrictions or preferences"
             />
           </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
+          />
         </div>
       </div>
     );
@@ -361,6 +398,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Tailored Fit", value: "Tailored Fit", icon: "📏" }
     ];
 
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
+    ];
+
     return (
       <div className="space-y-8">
         {/* Row 1: Core Style Elements */}
@@ -413,6 +456,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
             description="Who is this designed for?"
           />
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
+          />
+        </div>
       </div>
     );
   };
@@ -447,6 +501,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Luxury", value: "Luxury", icon: "💎", description: "$5000+" }
     ];
 
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
+    ];
+
     return (
       <div className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -475,6 +535,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
             options={budgetOptions}
             icon={<span className="text-2xl">💰</span>}
             description="What's your investment level?"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
           />
         </div>
       </div>
@@ -515,16 +586,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Contouring", value: "Contouring", icon: "🎭" }
     ];
 
-    const colorSchemeOptions: CustomOption[] = [
-      { label: "Any Colors", value: "Any Colors", icon: "🎨" },
-      { label: "Warm Tones", value: "Warm Tones", icon: "🧡", description: "Oranges, reds, golds" },
-      { label: "Cool Tones", value: "Cool Tones", icon: "💙", description: "Blues, purples, silvers" },
-      { label: "Neutral/Earth", value: "Neutral/Earth", icon: "🤎", description: "Browns, beiges, nudes" },
-      { label: "Bold/Bright", value: "Bold/Bright", icon: "🌈", description: "Vibrant colors" },
-      { label: "Monochromatic", value: "Monochromatic", icon: "⚫", description: "Single color family" },
-      { label: "Pastel", value: "Pastel", icon: "🌸", description: "Soft, muted colors" }
-    ];
-
     const intensityOptions: CustomOption[] = [
       { label: "Any Intensity", value: "Any Intensity", icon: "📊" },
       { label: "Subtle/Light", value: "Subtle/Light", icon: "🌙", description: "Barely there, natural" },
@@ -538,6 +599,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Teen/Young Adult", value: "Teen/Young Adult", icon: "👧", description: "15-25 years" },
       { label: "Adult", value: "Adult", icon: "👩", description: "25-45 years" },
       { label: "Mature/Sophisticated", value: "Mature/Sophisticated", icon: "👩‍🦳", description: "45+ years" }
+    ];
+
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
     ];
 
     return (
@@ -572,17 +639,8 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
           />
         </div>
 
-        {/* Row 2: Color & Intensity */}
+        {/* Row 2: Intensity & Target */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <DynamicSelect
-            label="Color Scheme"
-            value={customizations.color_scheme || "Any Colors"}
-            onValueChange={(value) => updateCustomization('color_scheme', value)}
-            options={colorSchemeOptions}
-            icon={<span className="text-2xl">🎨</span>}
-            description="What color palette do you prefer?"
-          />
-
           <DynamicSelect
             label="Intensity Level"
             value={customizations.intensity_level || "Any Intensity"}
@@ -599,6 +657,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
             options={ageGroupOptions}
             icon={<span className="text-2xl">👩</span>}
             description="Who is this look designed for?"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
           />
         </div>
       </div>
@@ -643,17 +712,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Entertainment", value: "Entertainment", icon: "🎭" }
     ];
 
-    const colorPaletteOptions: CustomOption[] = [
-      { label: "Any Colors", value: "Any Colors", icon: "🌈" },
-      { label: "Monochromatic", value: "Monochromatic", icon: "⚫", description: "Single color variations" },
-      { label: "Complementary", value: "Complementary", icon: "🔴🔵", description: "Opposite colors" },
-      { label: "Analogous", value: "Analogous", icon: "🟡🟠", description: "Adjacent colors" },
-      { label: "Triadic", value: "Triadic", icon: "🔺", description: "Three evenly spaced colors" },
-      { label: "Bold/Vibrant", value: "Bold/Vibrant", icon: "💥", description: "High contrast, bright" },
-      { label: "Muted/Subtle", value: "Muted/Subtle", icon: "🌫️", description: "Soft, understated" },
-      { label: "Earth Tones", value: "Earth Tones", icon: "🌍", description: "Browns, greens, tans" }
-    ];
-
     const complexityOptions: CustomOption[] = [
       { label: "Any Complexity", value: "Any Complexity", icon: "⭐" },
       { label: "Simple/Clean", value: "Simple/Clean", icon: "⚪", description: "Minimal elements" },
@@ -670,6 +728,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Adults/Professional", value: "Adults/Professional", icon: "👔", description: "Ages 35-65" },
       { label: "Seniors", value: "Seniors", icon: "👴", description: "Ages 65+" },
       { label: "B2B/Business", value: "B2B/Business", icon: "🏢", description: "Business audience" }
+    ];
+
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
     ];
 
     return (
@@ -707,15 +771,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
         {/* Row 2: Visual Elements */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <DynamicSelect
-            label="Color Palette"
-            value={customizations.color_palette || "Any Colors"}
-            onValueChange={(value) => updateCustomization('color_palette', value)}
-            options={colorPaletteOptions}
-            icon={<span className="text-2xl">🎨</span>}
-            description="What color scheme works best?"
-          />
-
-          <DynamicSelect
             label="Complexity Level"
             value={customizations.complexity_level || "Any Complexity"}
             onValueChange={(value) => updateCustomization('complexity_level', value)}
@@ -731,6 +786,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
             options={audienceOptions}
             icon={<span className="text-2xl">👥</span>}
             description="Who is the primary audience?"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
           />
         </div>
       </div>
@@ -783,17 +849,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Fantasy/Fictional", value: "Fantasy/Fictional", icon: "🧚", description: "Imaginary worlds" }
     ];
 
-    const colorSchemeOptions: CustomOption[] = [
-      { label: "Any Colors", value: "Any Colors", icon: "🌈" },
-      { label: "Monochromatic", value: "Monochromatic", icon: "⚫", description: "Single color variations" },
-      { label: "Warm Palette", value: "Warm Palette", icon: "🔥", description: "Reds, oranges, yellows" },
-      { label: "Cool Palette", value: "Cool Palette", icon: "❄️", description: "Blues, greens, purples" },
-      { label: "Earth Tones", value: "Earth Tones", icon: "🌍", description: "Browns, beiges, natural" },
-      { label: "Vibrant/Bright", value: "Vibrant/Bright", icon: "💥", description: "Bold, saturated colors" },
-      { label: "Pastel/Soft", value: "Pastel/Soft", icon: "🌸", description: "Light, muted tones" },
-      { label: "Black & White", value: "Black & White", icon: "⚫⚪", description: "Monochrome only" }
-    ];
-
     const purposeOptions: CustomOption[] = [
       { label: "Any Purpose", value: "Any Purpose", icon: "🎯" },
       { label: "Personal Expression", value: "Personal Expression", icon: "💭", description: "Self expression & creativity" },
@@ -802,6 +857,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Portfolio/Exhibition", value: "Portfolio/Exhibition", icon: "🖼️", description: "Professional display" },
       { label: "Learning/Practice", value: "Learning/Practice", icon: "📚", description: "Skill development" },
       { label: "Therapeutic/Relaxing", value: "Therapeutic/Relaxing", icon: "🧘", description: "Stress relief" }
+    ];
+
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
     ];
 
     return (
@@ -836,7 +897,7 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
           />
         </div>
 
-        {/* Row 2: Subject & Visual Elements */}
+        {/* Row 2: Subject & Purpose */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <DynamicSelect
             label="Subject Matter"
@@ -848,21 +909,23 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
           />
 
           <DynamicSelect
-            label="Color Scheme"
-            value={customizations.art_color_scheme || "Any Colors"}
-            onValueChange={(value) => updateCustomization('art_color_scheme', value)}
-            options={colorSchemeOptions}
-            icon={<span className="text-2xl">🌈</span>}
-            description="What color palette appeals to you?"
-          />
-
-          <DynamicSelect
             label="Purpose"
             value={customizations.art_purpose || "Any Purpose"}
             onValueChange={(value) => updateCustomization('art_purpose', value)}
             options={purposeOptions}
             icon={<span className="text-2xl">🎯</span>}
             description="What's the intended use?"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
           />
         </div>
       </div>
@@ -904,17 +967,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Large (50+)", value: "Large (50+)", icon: "🏟️", description: "Big celebration" }
     ];
 
-    const colorThemeOptions: CustomOption[] = [
-      { label: "Any Colors", value: "Any Colors", icon: "🌈" },
-      { label: "Classic/Elegant", value: "Classic/Elegant", icon: "🤍", description: "Whites, creams, golds" },
-      { label: "Bold/Vibrant", value: "Bold/Vibrant", icon: "💥", description: "Bright, energetic colors" },
-      { label: "Pastel/Soft", value: "Pastel/Soft", icon: "🌸", description: "Light, gentle tones" },
-      { label: "Monochromatic", value: "Monochromatic", icon: "⚫", description: "Single color variations" },
-      { label: "Seasonal", value: "Seasonal", icon: "🍂", description: "Colors matching the season" },
-      { label: "Metallic Accents", value: "Metallic Accents", icon: "✨", description: "Gold, silver, copper touches" },
-      { label: "Earth Tones", value: "Earth Tones", icon: "🌍", description: "Natural, organic colors" }
-    ];
-
     const venueTypeOptions: CustomOption[] = [
       { label: "Any Venue", value: "Any Venue", icon: "🏢" },
       { label: "Indoor/Home", value: "Indoor/Home", icon: "🏠", description: "Comfortable & familiar" },
@@ -931,6 +983,12 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
       { label: "Moderate", value: "Moderate", icon: "💸", description: "$500-2000" },
       { label: "Generous", value: "Generous", icon: "💳", description: "$2000-5000" },
       { label: "Luxury", value: "Luxury", icon: "💎", description: "$5000+" }
+    ];
+
+    const textLengthOptions: CustomOption[] = [
+      { label: "200-300 words", value: "200-300", icon: "📄" },
+      { label: "300-500 words", value: "300-500", icon: "📄" },
+      { label: "500-700 words", value: "500-700", icon: "📄" }
     ];
 
     return (
@@ -965,17 +1023,8 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
           />
         </div>
 
-        {/* Row 2: Design & Practical Elements */}
+        {/* Row 2: Practical Elements */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <DynamicSelect
-            label="Color Theme"
-            value={customizations.event_color_theme || "Any Colors"}
-            onValueChange={(value) => updateCustomization('event_color_theme', value)}
-            options={colorThemeOptions}
-            icon={<span className="text-2xl">🎨</span>}
-            description="What color palette works best?"
-          />
-
           <DynamicSelect
             label="Venue Style"
             value={customizations.venue_type || "Any Venue"}
@@ -992,6 +1041,17 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
             options={budgetOptions}
             icon={<span className="text-2xl">💰</span>}
             description="What's your budget level?"
+          />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ColorBalanceSelector />
+          <DynamicSelect
+            label="Text Length"
+            value={customizations.text_length || "300-500"}
+            onValueChange={(value) => updateCustomization('text_length', value)}
+            options={textLengthOptions}
+            icon={<span className="text-2xl">📄</span>}
+            description="How long should the generated text be?"
           />
         </div>
       </div>

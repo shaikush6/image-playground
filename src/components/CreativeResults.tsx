@@ -1,39 +1,64 @@
 'use client';
 
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Camera, 
-  Video, 
-  Layers, 
-  Download, 
-  Share2, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Camera,
+  Video,
+  Layers,
+  Download,
+  Share2,
   Heart,
   Play,
   Pause,
   RotateCcw,
   Maximize2,
   Volume2,
-  VolumeX
+  VolumeX,
+  Images,
+  Sparkles
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { OutputFormat } from './OutputFormatSelector';
-
-interface CreativeResult {
-  image_url?: string;
-  video_url?: string;
-  series_urls?: string[];
-  ideas: string;
-  formats_generated: OutputFormat[];
-  errors?: string[];
-}
+import { CreativeResult } from '@/lib/agents';
+import { MasonryResultsGrid } from './MasonryResultsGrid';
+import type { AspectRatioId } from '@/config/aspectRatios';
+import { ImageSeriesConfigPanel } from '@/features/image-series/ImageSeriesConfig';
+import type { ImageSeriesConfig } from '@/features/image-series/useImageSeries';
 
 interface CreativeResultsProps {
   result: CreativeResult | null;
   isGenerating: boolean;
   selectedFormats: OutputFormat[];
+  imageAspectRatio?: AspectRatioId;
+  videoAspectRatio?: AspectRatioId;
+  domain?: string;
   onRegenerate?: () => void;
+  onCreateSeries?: (config: ImageSeriesConfig) => Promise<void>;
+}
+
+// Helper function to get aspect ratio CSS class
+function getAspectRatioClass(aspectRatio: AspectRatioId = '1:1'): string {
+  switch (aspectRatio) {
+    case '9:16':
+      return 'aspect-[9/16]';
+    case '16:9':
+      return 'aspect-[16/9]';
+    case '1:1':
+      return 'aspect-square';
+    default:
+      return 'aspect-square';
+  }
 }
 
 interface VideoPlayerProps {
@@ -49,15 +74,28 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const togglePlay = () => {
-    if (videoRef.current) {
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+
+    try {
       if (isPlaying) {
         videoRef.current.pause();
+        setIsPlaying(false);
       } else {
-        videoRef.current.play();
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+        setIsPlaying(true);
       }
-      setIsPlaying(!isPlaying);
+      setPlaybackError(null);
+    } catch (error) {
+      console.error('Video playback failed:', error);
+      setIsPlaying(false);
+      setPlaybackError('Video playback is not supported in this browser. Please download the file instead.');
     }
   };
 
@@ -76,13 +114,17 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
   };
 
   const toggleFullscreen = () => {
-    if (videoRef.current) {
+    if (!videoRef.current) return;
+
+    try {
       if (!isFullscreen) {
         videoRef.current.requestFullscreen();
-      } else {
+      } else if (document.fullscreenElement) {
         document.exitFullscreen();
       }
       setIsFullscreen(!isFullscreen);
+    } catch (error) {
+      console.error('Fullscreen request failed:', error);
     }
   };
 
@@ -95,7 +137,15 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
+      setPlaybackError(null);
+      setIsLoading(false);
     }
+  };
+
+  const handleVideoError = () => {
+    setPlaybackError('Unable to load the generated video. Try downloading it to view locally.');
+    setIsPlaying(false);
+    setIsLoading(false);
   };
 
   const formatTime = (time: number) => {
@@ -113,14 +163,40 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
         muted={isMuted}
         loop
         playsInline
+        preload="metadata"
+        controls={Boolean(playbackError)}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onError={handleVideoError}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
+
+      {isLoading && !playbackError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-white/30 border-t-white"></div>
+            <p className="text-white text-sm">Loading video...</p>
+          </div>
+        </div>
+      )}
+
+      {playbackError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 text-white text-center px-6">
+          <p className="text-sm">{playbackError}</p>
+          <a
+            href={src}
+            download
+            className="inline-flex items-center gap-2 rounded-md border border-white/40 px-3 py-1 text-sm font-medium hover:bg-white/10"
+          >
+            <Download className="h-4 w-4" />
+            Download video
+          </a>
+        </div>
+      )}
       
       {/* Video Controls Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-200 ${playbackError ? 'pointer-events-none' : 'group-hover:opacity-100'}`}>
         <div className="absolute bottom-0 left-0 right-0 p-4">
           {/* Progress Bar */}
           <div className="w-full bg-white/20 rounded-full h-1 mb-3">
@@ -137,7 +213,8 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
                 variant="ghost"
                 size="sm"
                 onClick={togglePlay}
-                className="text-white hover:bg-white/20 p-2"
+                disabled={Boolean(playbackError)}
+                className="text-white hover:bg-white/20 p-2 disabled:opacity-50"
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
@@ -187,13 +264,24 @@ function VideoPlayer({ src, title, className = '' }: VideoPlayerProps) {
   );
 }
 
-export function CreativeResults({ 
-  result, 
-  isGenerating, 
-  selectedFormats, 
-  onRegenerate 
+export function CreativeResults({
+  result,
+  isGenerating,
+  selectedFormats,
+  imageAspectRatio = '1:1',
+  videoAspectRatio = '9:16',
+  domain,
+  onRegenerate,
+  onCreateSeries
 }: CreativeResultsProps) {
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
+  const [showRemixModal, setShowRemixModal] = useState(false);
+  const [isCreatingSeries, setIsCreatingSeries] = useState(false);
+  const [seriesConfig, setSeriesConfig] = useState<ImageSeriesConfig>({
+    count: 5,
+    themeId: 'auto',
+    aspectRatio: imageAspectRatio
+  });
 
   const toggleLike = (itemId: string) => {
     const newLiked = new Set(likedItems);
@@ -240,6 +328,20 @@ export function CreativeResults({
       } catch (error) {
         console.error('Copy to clipboard failed:', error);
       }
+    }
+  };
+
+  const handleCreateSeries = async () => {
+    if (!onCreateSeries) return;
+
+    setIsCreatingSeries(true);
+    try {
+      await onCreateSeries(seriesConfig);
+      setShowRemixModal(false);
+    } catch (error) {
+      console.error('Failed to create series:', error);
+    } finally {
+      setIsCreatingSeries(false);
     }
   };
 
@@ -320,9 +422,18 @@ export function CreativeResults({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
-              {result.ideas}
-            </p>
+            <div className="prose dark:prose-invert max-w-none">
+              <ReactMarkdown
+                components={{
+                  h1: ({node, ...props}) => <h1 className="mb-4" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="mb-4" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="mb-4" {...props} />,
+                  p: ({node, ...props}) => <p className="mb-4" {...props} />,
+                }}
+              >
+                {result.ideas}
+              </ReactMarkdown>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -344,11 +455,11 @@ export function CreativeResults({
                 <img
                   src={result.image_url}
                   alt="Generated creative image"
-                  className="w-full aspect-[9/16] object-cover"
+                  className={`w-full ${getAspectRatioClass(imageAspectRatio)} object-cover`}
                 />
                 
                 {/* Action Overlay */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-4">
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"
@@ -373,6 +484,19 @@ export function CreativeResults({
                       <Share2 className="h-4 w-4" />
                     </Button>
                   </div>
+
+                  {/* Create Series Button */}
+                  {onCreateSeries && domain && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setShowRemixModal(true)}
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium"
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Create Series from This
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -394,7 +518,7 @@ export function CreativeResults({
                 <VideoPlayer
                   src={result.video_url}
                   title="Creative Video"
-                  className="w-full aspect-[9/16]"
+                  className={`w-full ${getAspectRatioClass(videoAspectRatio)}`}
                 />
                 
                 {/* Action Overlay */}
@@ -430,7 +554,7 @@ export function CreativeResults({
         )}
       </div>
 
-      {/* Video Series */}
+      {/* Video Series - Masonry Grid */}
       {result.series_urls && result.series_urls.length > 0 && (
         <Card>
           <CardHeader>
@@ -442,38 +566,48 @@ export function CreativeResults({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {result.series_urls.map((videoUrl, index) => (
-                <div key={index} className="relative group">
-                  <VideoPlayer
-                    src={videoUrl}
-                    title={`Part ${index + 1}`}
-                    className="w-full aspect-[9/16]"
-                  />
-                  
-                  {/* Action Overlay */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <div className="flex gap-1">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => toggleLike(`series-${index}`)}
-                        className={likedItems.has(`series-${index}`) ? 'bg-red-100 text-red-600' : ''}
-                      >
-                        <Heart className={`h-3 w-3 ${likedItems.has(`series-${index}`) ? 'fill-current' : ''}`} />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => downloadContent(videoUrl, `creative-series-part-${index + 1}.mp4`)}
-                      >
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <MasonryResultsGrid
+              items={result.series_urls.map((url, index) => ({
+                id: `series-${index}`,
+                type: 'video' as const,
+                url,
+                title: `Part ${index + 1}`,
+                description: `Series part ${index + 1} of ${result.series_urls!.length}`
+              }))}
+              onItemClick={(item) => {
+                // Optional: could open in fullscreen or modal
+                console.log('Clicked item:', item);
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Image Series - Masonry Grid */}
+      {result.image_series_urls && result.image_series_urls.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Images className="h-5 w-5 text-pink-600" />
+              Image Series
+              <Badge variant="secondary">Professional Gallery</Badge>
+              <Badge variant="outline">{result.image_series_urls.length} images</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MasonryResultsGrid
+              items={result.image_series_urls.map((url, index) => ({
+                id: `image-series-${index}`,
+                type: 'image' as const,
+                url,
+                title: `Image ${index + 1}`,
+                description: `Series image ${index + 1} of ${result.image_series_urls!.length}`
+              }))}
+              onItemClick={(item) => {
+                // Optional: could open in lightbox or modal
+                console.log('Clicked item:', item);
+              }}
+            />
           </CardContent>
         </Card>
       )}
@@ -496,12 +630,73 @@ export function CreativeResults({
                 {format === 'image' && <Camera className="h-3 w-3 mr-1" />}
                 {format === 'video' && <Video className="h-3 w-3 mr-1" />}
                 {format === 'series' && <Layers className="h-3 w-3 mr-1" />}
+                {format === 'image-series' && <Images className="h-3 w-3 mr-1" />}
                 {format}
               </Badge>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Remix Modal */}
+      <Dialog open={showRemixModal} onOpenChange={setShowRemixModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-purple-600" />
+              Create Image Series
+            </DialogTitle>
+            <DialogDescription>
+              Generate a professional image series based on your current image's style and colors.
+              Perfect for social media campaigns, portfolios, and storytelling.
+            </DialogDescription>
+          </DialogHeader>
+
+          {domain && (
+            <div className="py-4">
+              <ImageSeriesConfigPanel
+                domain={domain}
+                config={seriesConfig}
+                onCountChange={(count) => setSeriesConfig(prev => ({ ...prev, count }))}
+                onThemeChange={(themeId) => {
+                  setSeriesConfig(prev => ({ ...prev, themeId }));
+                }}
+                onAspectRatioChange={(aspectRatio) => {
+                  setSeriesConfig(prev => ({ ...prev, aspectRatio }));
+                }}
+                disabled={isCreatingSeries}
+              />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRemixModal(false)}
+              disabled={isCreatingSeries}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSeries}
+              disabled={isCreatingSeries}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              {isCreatingSeries ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white mr-2"></div>
+                  Creating Series...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Create {seriesConfig.count} Images
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

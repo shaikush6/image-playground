@@ -28,6 +28,8 @@ export class AnthropicService {
       console.log('🔑 Checking Anthropic API key...');
       if (!process.env.ANTHROPIC_API_KEY) {
         throw new Error('Missing ANTHROPIC_API_KEY environment variable');
+      } else {
+        console.log(`✅ Found API Key starting with: ${process.env.ANTHROPIC_API_KEY.substring(0, 5)}...`);
       }
 
       console.log('🤖 Initializing Anthropic client...');
@@ -39,7 +41,7 @@ export class AnthropicService {
       console.log(`🖼️ Sending image to Anthropic (${imageBase64.length} chars base64, type: ${mimeType})...`);
       
       const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
         messages: [
           {
@@ -132,9 +134,10 @@ Ensure hex codes are accurate. Be perceptive in naming colors and suggesting rol
       }
       return null;
     } catch (error) {
-      console.error('💥 Error extracting palette:', error);
+      console.error('💥 Error extracting palette from Anthropic:', JSON.stringify(error, null, 2));
       if (error instanceof Error) {
         console.error('Error message:', error.message);
+        console.error('Error name:', error.name);
         console.error('Error stack:', error.stack);
       }
       return null;
@@ -161,9 +164,11 @@ Ensure hex codes are accurate. Be perceptive in naming colors and suggesting rol
         .join(', ');
 
       const customizationsText = Object.entries(customizations)
-        .filter(([_, value]) => value && value !== 'Any' && value !== 'Chef\'s choice')
+        .filter(([key, value]) => value && value !== 'Any' && value !== 'Chef\'s choice' && key !== 'text_length')
         .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
         .join(', ');
+      
+      const textLength = customizations.text_length || '300-500';
 
       let prompt = `You are a creative expert in ${domain}. Create inspiring and detailed ideas based on this color palette:
 
@@ -172,10 +177,10 @@ Color Palette: ${paletteDescription}
 ${customizationsText ? `Customizations: ${customizationsText}` : ''}
 ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
 
-Generate creative, detailed, and inspiring ideas that make the most of these colors. Be specific, creative, and provide actionable concepts.`;
+Generate creative, detailed, and inspiring ideas that make the most of these colors. Be specific, creative, and provide actionable concepts. The response should be between ${textLength} words.`;
 
       const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1500,
         messages: [
           {

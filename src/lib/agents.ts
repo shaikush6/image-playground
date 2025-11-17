@@ -1,11 +1,13 @@
 import { AnthropicService, PaletteEntry } from './anthropic';
 import { GeminiImageService } from './gemini';
+import { buildImageSeriesPrompts } from '@/utils/promptBuilder';
 
 export interface CreativeResult {
   ideas: string;
   image_url?: string;
   video_url?: string;
-  series_urls?: string[];
+  series_urls?: string[];  // Video series
+  image_series_urls?: string[];  // Image series
   formats_generated: string[];
   errors?: string[];
   // Legacy fields (kept for backwards compatibility)
@@ -65,6 +67,9 @@ export interface CreativeCustomizations {
   color_palette?: string;
   complexity_level?: string;
   target_audience?: string;
+
+  // Text Generation
+  text_length?: string;
 }
 
 export const CREATIVE_PATHS = [
@@ -92,10 +97,11 @@ export class CreativeAgentsService {
     path: string,
     palette: PaletteEntry[],
     customizations: CreativeCustomizations = {},
-    imagePromptChoice: string
+    imagePromptChoice: string,
+    aspectRatio: '1:1' | '16:9' | '9:16' = '1:1'
   ): Promise<CreativeResult> {
     try {
-      const result: CreativeResult = { ideas: '' };
+      const result: CreativeResult = { ideas: '', formats_generated: [] };
 
       // Generate text ideas based on the domain
       switch (path) {
@@ -124,14 +130,16 @@ export class CreativeAgentsService {
           result.ideas = "This creative path is not yet implemented.";
       }
 
-      // Generate image using Gemini
+      // Generate image using Gemini with aspect ratio
       result.image_url = await GeminiImageService.generateImageForDomain(
         path,
         result.ideas,
         palette,
-        imagePromptChoice
+        imagePromptChoice,
+        aspectRatio
       );
 
+      result.formats_generated.push('image');
       return result;
     } catch (error) {
       console.error('Error generating creative ideas:', error);
@@ -150,7 +158,7 @@ export class CreativeAgentsService {
     const ideas = await AnthropicService.generateCreativeIdeas(
       palette,
       'culinary arts and cooking',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a detailed dish concept including: dish name, description, key ingredients, plating suggestions, and cooking techniques. Focus on how the colors inspire the flavors and presentation.`
     );
     return ideas;
@@ -164,7 +172,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'fashion design and styling',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a complete outfit concept including: style description, key pieces, fabric suggestions, accessories, and styling tips. Explain how each color can be incorporated into the look.`
     );
   }
@@ -177,7 +185,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'interior design and home decor',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a complete room design concept including: color scheme application, furniture suggestions, materials and textures, lighting ideas, and decorative elements.`
     );
   }
@@ -190,7 +198,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'art and craft creation',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a detailed art project concept including: artistic vision, techniques to use, materials needed, composition ideas, and step-by-step creative process.`
     );
   }
@@ -203,7 +211,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'makeup artistry and beauty',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a complete makeup look concept including: color placement, techniques, product suggestions, and application tips. Explain how to use each color in the palette.`
     );
   }
@@ -216,7 +224,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'event planning and design',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a comprehensive event theme concept including: overall aesthetic, decoration ideas, table settings, lighting, floral arrangements, and guest experience elements.`
     );
   }
@@ -229,7 +237,7 @@ export class CreativeAgentsService {
     return await AnthropicService.generateCreativeIdeas(
       palette,
       'graphic and web design',
-      customizations,
+      { ...customizations, text_length: customizations.text_length },
       `${additionalContext} Create a complete design concept including: visual hierarchy, typography suggestions, layout ideas, brand applications, and user experience considerations.`
     );
   }
@@ -373,5 +381,64 @@ export class CreativeAgentsService {
       parts.push(`Target audience: ${customizations.target_audience}`);
     }
     return parts.join('. ');
+  }
+
+  // Image Series Generation
+  static async generateImageSeries(
+    path: string,
+    palette: PaletteEntry[],
+    customizations: CreativeCustomizations,
+    themeId: string,
+    count: number,
+    aspectRatio: '1:1' | '16:9' | '9:16' = '1:1'
+  ): Promise<{ image_series_urls: string[]; ideas: string; errors: string[] }> {
+    try {
+      // Build series prompts using utility
+      const seriesPrompts = buildImageSeriesPrompts(
+        path,
+        palette,
+        customizations,
+        themeId,
+        count
+      );
+
+      const imageUrls: string[] = [];
+      const errors: string[] = [];
+
+      // Generate each image in the series
+      for (let i = 0; i < seriesPrompts.length; i++) {
+        console.log(`🎨 Generating image ${i + 1}/${seriesPrompts.length} in series...`);
+
+        try {
+          const imageUrl = await GeminiImageService.generateImage({
+            prompt: seriesPrompts[i],
+            aspectRatio,
+            style: 'photorealistic'
+          });
+
+          if (imageUrl) {
+            imageUrls.push(imageUrl);
+          } else {
+            errors.push(`Failed to generate image ${i + 1}`);
+          }
+        } catch (error) {
+          console.error(`Error generating image ${i + 1}:`, error);
+          errors.push(`Error on image ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      return {
+        image_series_urls: imageUrls,
+        ideas: seriesPrompts.join('\n\n---\n\n'),
+        errors
+      };
+    } catch (error) {
+      console.error('Error generating image series:', error);
+      return {
+        image_series_urls: [],
+        ideas: 'Error generating image series.',
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      };
+    }
   }
 }

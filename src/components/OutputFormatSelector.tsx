@@ -2,10 +2,10 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Camera, Video, Layers, Sparkles, Clock, Users } from 'lucide-react';
+import { Camera, Video, Layers, Sparkles, Clock, Users, Images } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
-export type OutputFormat = 'image' | 'video' | 'series' | 'combined';
+export type OutputFormat = 'image' | 'video' | 'series' | 'combined' | 'image-series';
 
 interface OutputOption {
   id: OutputFormat;
@@ -32,6 +32,15 @@ const OUTPUT_OPTIONS: OutputOption[] = [
     badge: 'Fast',
     duration: '~30s',
     socialPlatforms: ['Instagram Post', 'Pinterest', 'Facebook']
+  },
+  {
+    id: 'image-series',
+    label: 'Image Series',
+    description: 'Professional 3-10 image storytelling sequence',
+    icon: <Images className="h-5 w-5" />,
+    badge: 'Professional',
+    duration: '~2-5min',
+    socialPlatforms: ['Instagram Carousel', 'Portfolio', 'Blog', 'Marketing Campaign']
   },
   {
     id: 'video',
@@ -93,14 +102,15 @@ export function OutputFormatSelector({
     if (selectedFormats.length === 0) return "";
     
     // Rough duration estimates in seconds
-    const durations = {
+    const durations: Record<OutputFormat, number> = {
       image: 30,
+      'image-series': 210, // 3.5 minutes average (for 5-6 images)
       video: 240, // 4 minutes average
       series: 1200, // 20 minutes
       combined: 1500 // 25 minutes
     };
-    
-    const totalSeconds = selectedFormats.reduce((sum, format) => sum + durations[format], 0);
+
+    const totalSeconds = selectedFormats.reduce((sum, format) => sum + (durations[format] || 0), 0);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     
