@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Palette, Sparkles, Wand2, BookOpen, Share2 } from 'lucide-react';
+import { Palette, Sparkles, Wand2, BookOpen, Share2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -31,8 +31,15 @@ import { ColorStoryMode } from '@/components/ColorStoryMode';
 import { SessionSharing } from '@/components/SessionSharing';
 import { AnimatedJourneyShowcase } from '@/components/AnimatedJourneyShowcase';
 import { usePaletteHistory } from '@/hooks/usePaletteHistory';
+import { ProductModeToggle } from '@/components/ProductPath/ProductModeToggle';
+import { ProductUpload } from '@/components/ProductPath/ProductUpload';
+import { EnvironmentCategorySelector } from '@/components/ProductPath/EnvironmentCategorySelector';
+import { EnvironmentCustomizationPanel } from '@/components/ProductPath/EnvironmentCustomizationPanel';
+import { ProductResults } from '@/components/ProductPath/ProductResults';
+import { getCategoryById, getVariationById } from '@/config/environments';
 
 type CreativePath = typeof CREATIVE_PATHS[number];
+type AppMode = 'color' | 'product';
 
 export default function HomePage() {
   const [currentImage, setCurrentImage] = useState<string>('');
@@ -52,6 +59,17 @@ export default function HomePage() {
   const [showColorStory, setShowColorStory] = useState(false);
   const [showSessionSharing, setShowSessionSharing] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+
+  // Product Path mode states
+  const [appMode, setAppMode] = useState<AppMode>('color');
+  const [productImage, setProductImage] = useState<string>('');
+  const [extractedProduct, setExtractedProduct] = useState<string>('');
+  const [isExtractingProduct, setIsExtractingProduct] = useState(false);
+  const [selectedEnvironmentCategory, setSelectedEnvironmentCategory] = useState<string>('');
+  const [selectedVariation, setSelectedVariation] = useState<string>('');
+  const [customEnvironmentPrompt, setCustomEnvironmentPrompt] = useState<string>('');
+  const [productResults, setProductResults] = useState<any>(null);
+  const [isGeneratingProduct, setIsGeneratingProduct] = useState(false);
 
   // Custom hooks for modular features
   const aspectRatio = useAspectRatio(selectedPath);
@@ -245,6 +263,105 @@ export default function HomePage() {
     return 'upload';
   };
 
+  // Product Path handlers
+  const handleProductSelect = async (imageData: string, extracted?: string) => {
+    setProductImage(imageData);
+    if (extracted) {
+      setExtractedProduct(extracted);
+    } else if (imageData) {
+      // Auto-extract background
+      await extractProductBackground(imageData);
+    } else {
+      // Reset when image is removed
+      setExtractedProduct('');
+      setSelectedEnvironmentCategory('');
+      setSelectedVariation('');
+      setProductResults(null);
+    }
+  };
+
+  const extractProductBackground = async (imageData: string) => {
+    setIsExtractingProduct(true);
+    try {
+      const response = await fetch('/api/remove-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setExtractedProduct(result.imageData || result.imageUrl);
+      } else {
+        console.error('Failed to extract product');
+        alert('Failed to extract product. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error extracting product:', error);
+      alert('Error extracting product. Please try again.');
+    } finally {
+      setIsExtractingProduct(false);
+    }
+  };
+
+  const generateProductPlacement = async () => {
+    if (!extractedProduct || !selectedEnvironmentCategory) return;
+
+    setIsGeneratingProduct(true);
+    setProductResults(null);
+
+    try {
+      const response = await fetch('/api/product-placement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productImage: extractedProduct,
+          categoryId: selectedEnvironmentCategory,
+          variationId: selectedVariation || undefined,
+          customPrompt: customEnvironmentPrompt || undefined,
+          aspectRatio: aspectRatio.imageAspectRatio,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const category = getCategoryById(selectedEnvironmentCategory);
+        const variation = selectedVariation ? getVariationById(selectedEnvironmentCategory, selectedVariation) : null;
+
+        setProductResults({
+          imageUrl: result.imageUrl,
+          imageData: result.imageData,
+          promptUsed: result.promptUsed,
+          categoryName: category?.name || 'Unknown',
+          variationName: variation?.name,
+          aspectRatio: aspectRatio.imageAspectRatio,
+        });
+      } else {
+        console.error('Failed to generate product placement');
+        alert('Failed to generate product placement. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error generating product placement:', error);
+      alert('Error generating product placement. Please try again.');
+    } finally {
+      setIsGeneratingProduct(false);
+    }
+  };
+
+  const handleModeChange = (mode: AppMode) => {
+    setAppMode(mode);
+    // Reset state when switching modes
+    if (mode === 'color') {
+      setProductImage('');
+      setExtractedProduct('');
+      setSelectedEnvironmentCategory('');
+      setProductResults(null);
+    } else {
+      setPalette(null);
+      setResults(null);
+    }
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Adaptive background based on palette */}
@@ -272,18 +389,34 @@ export default function HomePage() {
           </p>
         </motion.div>
 
-        {/* Color Story Timeline */}
+        {/* Mode Toggle */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="mb-12"
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="mb-8"
         >
-          <ColorStoryTimeline currentStep={getTimelineStep()} compact={true} />
+          <ProductModeToggle
+            mode={appMode}
+            onChange={handleModeChange}
+            disabled={isGenerating || isGeneratingProduct}
+          />
         </motion.div>
 
-        {/* Animated Journey Showcase - shown when no palette yet */}
-        {!palette && (
+        {/* Color Story Timeline - Color Palette Mode Only */}
+        {appMode === 'color' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mb-12"
+          >
+            <ColorStoryTimeline currentStep={getTimelineStep()} compact={true} />
+          </motion.div>
+        )}
+
+        {/* Animated Journey Showcase - shown when no palette yet in Color Mode */}
+        {appMode === 'color' && !palette && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -294,8 +427,11 @@ export default function HomePage() {
           </motion.div>
         )}
 
-        {/* Top Section - Image Upload and Palette Extraction */}
-        <div className={`${palette ? 'grid grid-cols-1 lg:grid-cols-2 gap-8' : 'max-w-3xl mx-auto'} mb-8`}>
+        {/* COLOR PALETTE MODE */}
+        {appMode === 'color' && (
+          <>
+            {/* Top Section - Image Upload and Palette Extraction */}
+            <div className={`${palette ? 'grid grid-cols-1 lg:grid-cols-2 gap-8' : 'max-w-3xl mx-auto'} mb-8`}>
           {/* Image Upload */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -720,6 +856,143 @@ export default function HomePage() {
             </motion.div>
           )}
         </AnimatePresence>
+          </>
+        )}
+
+        {/* PRODUCT PATH MODE */}
+        {appMode === 'product' && (
+          <>
+            {/* Product Upload Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="mb-8 max-w-2xl mx-auto"
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wand2 className="h-5 w-5 text-purple-600" />
+                    1. Upload Product Image
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ProductUpload
+                    onProductSelect={handleProductSelect}
+                    currentImage={productImage}
+                    extractedImage={extractedProduct}
+                    isExtracting={isExtractingProduct}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Environment Selection */}
+            {extractedProduct && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>2. Choose Environment Theme</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <EnvironmentCategorySelector
+                      selectedCategory={selectedEnvironmentCategory}
+                      onCategoryChange={(categoryId) => {
+                        setSelectedEnvironmentCategory(categoryId);
+                        setSelectedVariation('');
+                        setProductResults(null);
+                      }}
+                      disabled={isGeneratingProduct}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Environment Customization */}
+            {selectedEnvironmentCategory && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>3. Customize Scene</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <EnvironmentCustomizationPanel
+                      categoryId={selectedEnvironmentCategory}
+                      selectedVariationId={selectedVariation}
+                      customPrompt={customEnvironmentPrompt}
+                      onVariationChange={setSelectedVariation}
+                      onCustomPromptChange={setCustomEnvironmentPrompt}
+                      disabled={isGeneratingProduct}
+                    />
+
+                    {/* Aspect Ratio Selector */}
+                    <div className="mt-6">
+                      <AspectRatioSelector
+                        label="Image Aspect Ratio"
+                        value={aspectRatio.imageAspectRatio}
+                        onChange={aspectRatio.setImageAspectRatio}
+                        disabled={isGeneratingProduct}
+                      />
+                    </div>
+
+                    {/* Generate Button */}
+                    <div className="mt-6">
+                      <Button
+                        onClick={generateProductPlacement}
+                        disabled={isGeneratingProduct || (!selectedVariation && !customEnvironmentPrompt)}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                        size="lg"
+                      >
+                        {isGeneratingProduct ? (
+                          <>
+                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="h-5 w-5 mr-2" />
+                            Generate Product Placement
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Product Results */}
+            {productResults && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardContent className="pt-6">
+                    <ProductResults
+                      result={productResults}
+                      onRegenerate={generateProductPlacement}
+                      isRegenerating={isGeneratingProduct}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </>
+        )}
 
         {/* Color Story Modal */}
         <AnimatePresence>
