@@ -3,20 +3,28 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { ENVIRONMENT_CATEGORIES, EnvironmentCategory } from '@/config/environments';
+import { ENVIRONMENT_CATEGORIES } from '@/config/environments';
 
 interface EnvironmentCategorySelectorProps {
-  selectedCategory: string;
-  onCategoryChange: (categoryId: string) => void;
+  selectedCategory?: string;
+  selectedCategories?: string[];
+  onCategoryChange?: (categoryId: string) => void;
+  onCategoriesChange?: (categoryIds: string[]) => void;
   disabled?: boolean;
   filterType?: 'promotional' | 'lifestyle' | 'all';
+  multiSelect?: boolean;
+  maxSelections?: number;
 }
 
 export function EnvironmentCategorySelector({
   selectedCategory,
+  selectedCategories = [],
   onCategoryChange,
+  onCategoriesChange,
   disabled = false,
-  filterType = 'all'
+  filterType = 'all',
+  multiSelect = false,
+  maxSelections = 5,
 }: EnvironmentCategorySelectorProps) {
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
 
@@ -24,14 +32,55 @@ export function EnvironmentCategorySelector({
     ? ENVIRONMENT_CATEGORIES
     : ENVIRONMENT_CATEGORIES.filter(cat => cat.type === filterType);
 
+  const handleCategoryClick = (categoryId: string) => {
+    if (disabled) return;
+
+    if (multiSelect && onCategoriesChange) {
+      const isSelected = selectedCategories.includes(categoryId);
+      if (isSelected) {
+        // Remove from selection
+        onCategoriesChange(selectedCategories.filter(id => id !== categoryId));
+      } else if (selectedCategories.length < maxSelections) {
+        // Add to selection
+        onCategoriesChange([...selectedCategories, categoryId]);
+      }
+    } else if (onCategoryChange) {
+      onCategoryChange(categoryId);
+    }
+  };
+
+  const isSelected = (categoryId: string) => {
+    if (multiSelect) {
+      return selectedCategories.includes(categoryId);
+    }
+    return selectedCategory === categoryId;
+  };
+
+  const getSelectionIndex = (categoryId: string) => {
+    if (!multiSelect) return -1;
+    return selectedCategories.indexOf(categoryId);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h3 className="text-xl font-semibold mb-2">Choose Environment Theme</h3>
-        <p className="text-sm text-muted-foreground">
-          Select how you want to showcase your product
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-xl font-semibold mb-2">
+            {multiSelect ? 'Select Scenes' : 'Choose Environment Theme'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {multiSelect
+              ? `Select up to ${maxSelections} scenes for your product (${selectedCategories.length} selected)`
+              : 'Select how you want to showcase your product'
+            }
+          </p>
+        </div>
+        {multiSelect && selectedCategories.length > 0 && (
+          <Badge variant="secondary" className="text-sm">
+            {selectedCategories.length} / {maxSelections}
+          </Badge>
+        )}
       </div>
 
       {/* Type Filter Badges */}
@@ -53,8 +102,10 @@ export function EnvironmentCategorySelector({
       {/* Category Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredCategories.map((category, index) => {
-          const isSelected = selectedCategory === category.id;
+          const categoryIsSelected = isSelected(category.id);
           const isHovered = hoveredCategory === category.id;
+          const selectionIndex = getSelectionIndex(category.id);
+          const isMaxReached = multiSelect && selectedCategories.length >= maxSelections && !categoryIsSelected;
 
           return (
             <motion.div
@@ -66,22 +117,22 @@ export function EnvironmentCategorySelector({
               onMouseLeave={() => setHoveredCategory(null)}
             >
               <motion.button
-                onClick={() => !disabled && onCategoryChange(category.id)}
-                disabled={disabled}
-                whileHover={{ scale: disabled ? 1 : 1.02 }}
-                whileTap={{ scale: disabled ? 1 : 0.98 }}
+                onClick={() => handleCategoryClick(category.id)}
+                disabled={disabled || isMaxReached}
+                whileHover={{ scale: (disabled || isMaxReached) ? 1 : 1.02 }}
+                whileTap={{ scale: (disabled || isMaxReached) ? 1 : 0.98 }}
                 className={`
                   relative w-full text-left p-5 rounded-xl border-2 transition-all duration-300 overflow-hidden
-                  ${isSelected
+                  ${categoryIsSelected
                     ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/50 dark:to-pink-950/50 shadow-lg'
                     : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-md'
                   }
-                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  ${(disabled || isMaxReached) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
               >
                 {/* Background gradient on hover */}
                 <AnimatePresence>
-                  {isHovered && !isSelected && (
+                  {isHovered && !categoryIsSelected && !isMaxReached && (
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -108,13 +159,13 @@ export function EnvironmentCategorySelector({
                       </div>
                     </div>
 
-                    {isSelected && (
+                    {categoryIsSelected && (
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                       >
                         <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0 flex-shrink-0">
-                          Selected
+                          {multiSelect && selectionIndex >= 0 ? `#${selectionIndex + 1}` : 'Selected'}
                         </Badge>
                       </motion.div>
                     )}
@@ -137,9 +188,9 @@ export function EnvironmentCategorySelector({
                 </div>
 
                 {/* Selection indicator */}
-                {isSelected && (
+                {categoryIsSelected && (
                   <motion.div
-                    layoutId="selected-environment-indicator"
+                    layoutId={multiSelect ? undefined : "selected-environment-indicator"}
                     className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500"
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                   />

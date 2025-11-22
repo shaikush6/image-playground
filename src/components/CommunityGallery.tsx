@@ -13,11 +13,12 @@ import {
   Eye,
   Shuffle,
   Search,
-  Filter,
   Grid3x3,
   List,
   Palette as PaletteIcon
 } from 'lucide-react';
+import Image from 'next/image';
+import { CREATIVE_PATHS } from '@/lib/agents';
 
 interface CommunityItem {
   id: string;
@@ -192,6 +193,26 @@ export function CommunityGallery({ onRemix, onItemClick }: CommunityGalleryProps
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant={filterPath === null ? 'default' : 'outline'}
+          onClick={() => setFilterPath(null)}
+        >
+          All Paths
+        </Button>
+        {CREATIVE_PATHS.map((path) => (
+          <Button
+            key={path}
+            size="sm"
+            variant={filterPath === path ? 'default' : 'outline'}
+            onClick={() => setFilterPath(path)}
+          >
+            {path}
+          </Button>
+        ))}
+      </div>
+
       {/* Grid/List View */}
       <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
         {sortedItems.map((item, index) => (
@@ -294,7 +315,14 @@ export function CommunityGallery({ onRemix, onItemClick }: CommunityGalleryProps
       {/* Empty State */}
       {sortedItems.length === 0 && (
         <div className="text-center py-12">
-          <Filter className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+          <Image
+            src={palette.length ? palette[0] : '/api/placeholder/64/64'}
+            alt="No results"
+            width={64}
+            height={64}
+            className="mx-auto mb-4 opacity-80 rounded-md"
+            unoptimized
+          />
           <h3 className="text-xl font-semibold mb-2">No creations found</h3>
           <p className="text-muted-foreground">
             Try adjusting your filters or search query

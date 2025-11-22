@@ -3,11 +3,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { Upload, Palette, Wand2, Sparkles, Camera, Video } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface JourneyStage {
   id: string;
-  icon: any;
+  icon: LucideIcon;
   label: string;
   color: string;
   example: {

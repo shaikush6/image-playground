@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CreativeAgentsService } from '@/lib/agents';
+import type { CreativeResult } from '@/lib/agents';
 import { VeoVideoService } from '@/lib/veo';
 
 export async function POST(request: NextRequest) {
@@ -24,9 +25,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎨 Generating ${formats.join(', ')} for ${path}`);
 
-    const result: any = {
+    const result: CreativeResult = {
       ideas: '',
-      formats_generated: []
+      formats_generated: [],
     };
 
     // Process each requested format

@@ -1,15 +1,13 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Wand2, Palette, ChevronRight, RotateCcw } from 'lucide-react';
+import { Sparkles, Palette, ChevronRight, RotateCcw } from 'lucide-react';
 import { CreativeCustomizations } from '@/lib/agents';
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useCallback, memo } from 'react';
 
 interface DynamicCustomizationPanelProps {
   selectedPath: string;
@@ -26,9 +24,9 @@ interface CustomOption {
   description?: string;
 }
 
-export function DynamicCustomizationPanel({ selectedPath, customizations, onCustomizationChange, isGenerating = false }: DynamicCustomizationPanelProps) {
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
-  const [hoveredOption, setHoveredOption] = useState<string | null>(null);
+export function DynamicCustomizationPanel({ selectedPath, customizations, onCustomizationChange, isGenerating: _isGenerating = false }: DynamicCustomizationPanelProps) {
+  // Note: _isGenerating is available for future use but currently unused
+  void _isGenerating;
 
   const updateCustomization = useCallback((key: string, value: string | string[]) => {
     onCustomizationChange({
@@ -44,10 +42,6 @@ export function DynamicCustomizationPanel({ selectedPath, customizations, onCust
   // All useCallback hooks must be at the top level
   const handleCuisineStyleChange = useCallback((value: string) => {
     updateCustomization('cuisine_style', value);
-  }, [updateCustomization]);
-
-  const handleDietaryNeedsChange = useCallback((values: string[]) => {
-    updateCustomization('dietary_needs', values);
   }, [updateCustomization]);
 
   const DynamicSelect = ({ 

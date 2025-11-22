@@ -1,7 +1,8 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,23 +16,24 @@ import {
   Image as ImageIcon,
   Palette as PaletteIcon,
   Wand2,
-  CheckCircle2
+  CheckCircle2,
 } from 'lucide-react';
-import { PaletteEntry } from '@/lib/anthropic';
+import type { LucideIcon } from 'lucide-react';
+import type { PaletteEntry } from '@/lib/anthropic';
+import type { CreativeResult } from '@/lib/agents';
 
 interface ColorStoryModeProps {
   originalImage: string;
   palette: PaletteEntry[];
   creativePath: string;
-  customizations: any;
-  result: any;
+  result?: CreativeResult | null;
 }
 
 interface StoryChapter {
   id: string;
   title: string;
   content: string;
-  icon: any;
+  icon: LucideIcon;
   visual?: string;
   colors?: string[];
 }
@@ -40,88 +42,92 @@ export function ColorStoryMode({
   originalImage,
   palette,
   creativePath,
-  customizations,
   result,
 }: ColorStoryModeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentChapter, setCurrentChapter] = useState(0);
-  const [showNarration, setShowNarration] = useState(true);
 
-  const generateStory = (): StoryChapter[] => {
-    const colorNames = palette.map(c => c.name).join(', ');
-
+  const chapters = useMemo<StoryChapter[]>(() => {
+    const colorNames = palette.map((entry) => entry.name).join(', ');
     return [
       {
         id: 'inspiration',
         title: 'The Inspiration',
-        content: `Your journey began with a simple image - a captured moment that held within it a universe of color possibilities. This image spoke to you, calling out to be transformed into something new.`,
+        content:
+          'Your journey began with a simple image—an instant that begged to be transformed into something new.',
         icon: ImageIcon,
         visual: originalImage,
       },
       {
         id: 'extraction',
         title: 'Color Discovery',
-        content: `From this image, AI extracted ${palette.length} distinct colors: ${colorNames}. Each color tells its own story - together, they form a harmonious palette that reflects the essence of your inspiration.`,
+        content: `From this image, AI extracted ${palette.length} distinct colors: ${colorNames}. Each tone carries its own personality, and together they form a harmonious palette ready for storytelling.`,
         icon: PaletteIcon,
-        colors: palette.map(c => c.hex),
+        colors: palette.map((entry) => entry.hex),
       },
       {
         id: 'transformation',
         title: 'The Vision',
-        content: `You chose to explore ${creativePath}, guided by your creative intuition. The AI analyzed the emotional resonance of your palette, understanding how ${palette[0]?.name} brings ${palette[0]?.name.toLowerCase().includes('blue') ? 'calm and trust' : palette[0]?.name.toLowerCase().includes('red') ? 'passion and energy' : 'unique character'} to the composition.`,
+        content: `You chose the ${creativePath} path, guiding AI to interpret how shades like ${palette[0]?.name ?? 'the lead hue'} set the emotional temperature for the work.`,
         icon: Wand2,
-        colors: palette.slice(0, 3).map(c => c.hex),
+        colors: palette.slice(0, 3).map((entry) => entry.hex),
       },
       {
         id: 'creation',
         title: 'Bringing It to Life',
-        content: `Through the fusion of your vision and AI creativity, something extraordinary emerged. Your palette danced across the canvas, each color finding its perfect place, creating ${result ? 'a stunning result' : 'magic'} that honors both your inspiration and imagination.`,
+        content: `Your palette danced across the canvas, each color finding its perfect place to create ${
+          result?.image_url ? 'a tangible output' : 'a vivid concept'
+        } worthy of your inspiration.`,
         icon: Sparkles,
         visual: result?.image_url,
       },
       {
         id: 'completion',
-        title: 'Your Creative Journey',
-        content: `This is more than just an image - it's a story of transformation. From inspiration to creation, you've turned color into emotion, vision into reality. Your creative journey is complete, but the possibilities are endless.`,
+        title: 'Creative Milestone',
+        content:
+          "This isn't just an output—it’s a color expedition from spark to spectacle. Your creative journey is complete, but the palette’s potential never ends.",
         icon: CheckCircle2,
       },
     ];
-  };
+  }, [originalImage, palette, creativePath, result]);
 
-  const [chapters] = useState<StoryChapter[]>(generateStory());
+  const chaptersCount = chapters.length;
+  const currentChapterData = chapters[currentChapter];
 
   const nextChapter = () => {
-    if (currentChapter < chapters.length - 1) {
-      setCurrentChapter(prev => prev + 1);
-    } else {
-      setIsPlaying(false);
-    }
+    setCurrentChapter((prev) => Math.min(prev + 1, chaptersCount - 1));
   };
 
   const prevChapter = () => {
-    if (currentChapter > 0) {
-      setCurrentChapter(prev => prev - 1);
-    }
+    setCurrentChapter((prev) => Math.max(prev - 1, 0));
   };
 
   const togglePlay = () => {
-    setIsPlaying(!isPlaying);
-    if (!isPlaying && currentChapter === chapters.length - 1) {
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
+    }
+    if (currentChapter === chaptersCount - 1) {
       setCurrentChapter(0);
     }
+    setIsPlaying(true);
   };
 
-  // Auto-advance when playing
-  useState(() => {
-    if (isPlaying) {
-      const timer = setTimeout(() => {
-        nextChapter();
-      }, 5000);
-      return () => clearTimeout(timer);
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    if (currentChapter >= chaptersCount - 1) {
+      setIsPlaying(false);
+      return undefined;
     }
-  });
 
-  const currentChapterData = chapters[currentChapter];
+    const timer = setTimeout(() => {
+      setCurrentChapter((prev) => Math.min(prev + 1, chaptersCount - 1));
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [isPlaying, currentChapter, chaptersCount]);
+
+  const ActionIcon = currentChapterData.icon;
 
   return (
     <div className="space-y-6">
@@ -133,7 +139,7 @@ export function ColorStoryMode({
           <div>
             <h3 className="text-xl font-semibold">Color Story</h3>
             <p className="text-sm text-muted-foreground">
-              Your creative journey from inspiration to creation
+              A narrated timeline from inspiration to creation
             </p>
           </div>
         </div>
@@ -151,7 +157,6 @@ export function ColorStoryMode({
 
       <Card className="border-2 border-indigo-200 dark:border-indigo-800 overflow-hidden">
         <CardContent className="p-0">
-          {/* Visual Section */}
           <div className="relative h-96 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30">
             <AnimatePresence mode="wait">
               <motion.div
@@ -163,19 +168,24 @@ export function ColorStoryMode({
                 className="absolute inset-0 flex items-center justify-center"
               >
                 {currentChapterData.visual ? (
-                  <img
-                    src={currentChapterData.visual}
-                    alt={currentChapterData.title}
-                    className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
-                  />
+                  <div className="relative w-[80%] h-[80%] max-w-full max-h-full">
+                    <Image
+                      src={currentChapterData.visual}
+                      alt={currentChapterData.title}
+                      fill
+                      sizes="(max-width: 1024px) 80vw, 600px"
+                      unoptimized
+                      className="object-contain rounded-lg shadow-2xl"
+                    />
+                  </div>
                 ) : currentChapterData.colors ? (
                   <div className="flex gap-4">
-                    {currentChapterData.colors.map((color, i) => (
+                    {currentChapterData.colors.map((color, index) => (
                       <motion.div
-                        key={i}
+                        key={color}
                         initial={{ scale: 0, rotate: -180 }}
                         animate={{ scale: 1, rotate: 0 }}
-                        transition={{ delay: i * 0.1 }}
+                        transition={{ delay: index * 0.1 }}
                         className="w-24 h-24 rounded-full shadow-2xl"
                         style={{ backgroundColor: color }}
                       />
@@ -183,56 +193,42 @@ export function ColorStoryMode({
                   </div>
                 ) : (
                   <div className="p-12">
-                    {React.createElement(currentChapterData.icon, {
-                      className: "h-32 w-32 text-indigo-300",
-                    })}
+                    <ActionIcon className="h-32 w-32 text-indigo-300" />
                   </div>
                 )}
               </motion.div>
             </AnimatePresence>
 
-            {/* Chapter Indicator */}
             <div className="absolute top-4 left-4">
               <Badge className="bg-black/70 text-white">
-                Chapter {currentChapter + 1} of {chapters.length}
+                Chapter {currentChapter + 1} of {chaptersCount}
               </Badge>
             </div>
           </div>
 
-          {/* Narration Section */}
-          {showNarration && (
-            <div className="p-6 bg-white dark:bg-slate-900">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentChapter}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    {React.createElement(currentChapterData.icon, {
-                      className: "h-6 w-6 text-indigo-600",
-                    })}
-                    <h3 className="text-2xl font-bold">{currentChapterData.title}</h3>
-                  </div>
-                  <p className="text-lg text-muted-foreground leading-relaxed">
-                    {currentChapterData.content}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          )}
+          <div className="p-6 bg-white dark:bg-slate-900">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentChapter}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <ActionIcon className="h-6 w-6 text-indigo-600" />
+                  <h3 className="text-2xl font-bold">{currentChapterData.title}</h3>
+                </div>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  {currentChapterData.content}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
 
-          {/* Controls */}
           <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={prevChapter}
-                disabled={currentChapter === 0}
-              >
+              <Button variant="outline" size="sm" onClick={prevChapter} disabled={currentChapter === 0}>
                 Previous
               </Button>
 
@@ -243,9 +239,13 @@ export function ColorStoryMode({
                 className="bg-gradient-to-r from-indigo-600 to-purple-600"
               >
                 {isPlaying ? (
-                  <><Pause className="h-4 w-4 mr-2" /> Pause</>
+                  <>
+                    <Pause className="h-4 w-4 mr-2" /> Pause
+                  </>
                 ) : (
-                  <><Play className="h-4 w-4 mr-2" /> Play Story</>
+                  <>
+                    <Play className="h-4 w-4 mr-2" /> Play Story
+                  </>
                 )}
               </Button>
 
@@ -253,20 +253,20 @@ export function ColorStoryMode({
                 variant="outline"
                 size="sm"
                 onClick={nextChapter}
-                disabled={currentChapter === chapters.length - 1}
+                disabled={currentChapter === chaptersCount - 1}
               >
                 Next
               </Button>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-gradient-to-r from-indigo-600 to-purple-600"
-                initial={{ width: 0 }}
-                animate={{ width: `${((currentChapter + 1) / chapters.length) * 100}%` }}
-                transition={{ duration: 0.3 }}
-              />
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-indigo-500" />
+                Inspired by your palette
+              </div>
+              <div>
+                Chapter {currentChapter + 1}/{chaptersCount}
+              </div>
             </div>
           </div>
         </CardContent>

@@ -147,7 +147,7 @@ Ensure hex codes are accurate. Be perceptive in naming colors and suggesting rol
   static async generateCreativeIdeas(
     palette: PaletteEntry[],
     domain: string,
-    customizations: Record<string, any> = {},
+    customizations: Record<string, unknown> = {},
     additionalContext?: string
   ): Promise<string> {
     try {
@@ -164,13 +164,22 @@ Ensure hex codes are accurate. Be perceptive in naming colors and suggesting rol
         .join(', ');
 
       const customizationsText = Object.entries(customizations)
-        .filter(([key, value]) => value && value !== 'Any' && value !== 'Chef\'s choice' && key !== 'text_length')
-        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+        .filter(([key, value]) => {
+          if (key === 'text_length') return false;
+          if (value === null || value === undefined) return false;
+          if (value === 'Any' || value === "Chef's choice") return false;
+          if (Array.isArray(value)) return value.length > 0;
+          return true;
+        })
+        .map(([key, value]) =>
+          `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`
+        )
         .join(', ');
-      
-      const textLength = customizations.text_length || '300-500';
 
-      let prompt = `You are a creative expert in ${domain}. Create inspiring and detailed ideas based on this color palette:
+      const textLengthValue = customizations.text_length;
+      const textLength = typeof textLengthValue === 'string' ? textLengthValue : '300-500';
+
+      const prompt = `You are a creative expert in ${domain}. Create inspiring and detailed ideas based on this color palette:
 
 Color Palette: ${paletteDescription}
 

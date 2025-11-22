@@ -28,6 +28,7 @@ import {
   Images,
   Sparkles
 } from 'lucide-react';
+import Image from 'next/image';
 import { useState, useRef } from 'react';
 import { OutputFormat } from './OutputFormatSelector';
 import { CreativeResult } from '@/lib/agents';
@@ -399,7 +400,7 @@ export function CreativeResults({
               <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
               <div>
                 <h4 className="font-medium text-orange-800 dark:text-orange-200">
-                  Some formats couldn't be generated
+                  Some formats couldn&apos;t be generated
                 </h4>
                 <ul className="text-sm text-orange-700 dark:text-orange-300 mt-1">
                   {result.errors.map((error, index) => (
@@ -425,10 +426,10 @@ export function CreativeResults({
             <div className="prose dark:prose-invert max-w-none">
               <ReactMarkdown
                 components={{
-                  h1: ({node, ...props}) => <h1 className="mb-4" {...props} />,
-                  h2: ({node, ...props}) => <h2 className="mb-4" {...props} />,
-                  h3: ({node, ...props}) => <h3 className="mb-4" {...props} />,
-                  p: ({node, ...props}) => <p className="mb-4" {...props} />,
+                  h1: (props) => <h1 className="mb-4" {...props} />,
+                  h2: (props) => <h2 className="mb-4" {...props} />,
+                  h3: (props) => <h3 className="mb-4" {...props} />,
+                  p: (props) => <p className="mb-4" {...props} />,
                 }}
               >
                 {result.ideas}
@@ -452,11 +453,16 @@ export function CreativeResults({
             </CardHeader>
             <CardContent className="p-0">
               <div className="relative group">
-                <img
-                  src={result.image_url}
-                  alt="Generated creative image"
-                  className={`w-full ${getAspectRatioClass(imageAspectRatio)} object-cover`}
-                />
+                <div className={`relative w-full ${getAspectRatioClass(imageAspectRatio)}`}>
+                  <Image
+                    src={result.image_url}
+                    alt="Generated creative image"
+                    fill
+                    unoptimized
+                    sizes="(max-width: 1024px) 100vw, 600px"
+                    className="object-cover rounded-md"
+                  />
+                </div>
                 
                 {/* Action Overlay */}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-4">
@@ -647,7 +653,7 @@ export function CreativeResults({
               Create Image Series
             </DialogTitle>
             <DialogDescription>
-              Generate a professional image series based on your current image's style and colors.
+              Generate a professional image series based on your current image&apos;s style and colors.
               Perfect for social media campaigns, portfolios, and storytelling.
             </DialogDescription>
           </DialogHeader>

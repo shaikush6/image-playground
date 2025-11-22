@@ -31,7 +31,7 @@ export function CustomizationPanel({ selectedPath, customizations, onCustomizati
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Chef's choice">Chef's choice</SelectItem>
+            <SelectItem value="Chef's choice">Chef&apos;s choice</SelectItem>
             <SelectItem value="Appetizer/Starter">Appetizer/Starter</SelectItem>
             <SelectItem value="Main Course (Meat)">Main Course (Meat)</SelectItem>
             <SelectItem value="Main Course (Fish)">Main Course (Fish)</SelectItem>
@@ -432,7 +432,7 @@ export function CustomizationPanel({ selectedPath, customizations, onCustomizati
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Any">Any</SelectItem>
-            <SelectItem value="Natural / 'No-Makeup' Makeup">Natural / 'No-Makeup' Makeup</SelectItem>
+            <SelectItem value="Natural / 'No-Makeup' Makeup">Natural / &apos;No-Makeup&apos; Makeup</SelectItem>
             <SelectItem value="Everyday Enhancing">Everyday Enhancing</SelectItem>
             <SelectItem value="Soft Glam">Soft Glam</SelectItem>
             <SelectItem value="Full Glam / Evening">Full Glam / Evening</SelectItem>

@@ -1,7 +1,6 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
 import { PaletteEntry } from '@/lib/anthropic';
 
 interface AdaptiveBackgroundProps {
@@ -10,42 +9,6 @@ interface AdaptiveBackgroundProps {
 }
 
 export function AdaptiveBackground({ palette, intensity = 0.3 }: AdaptiveBackgroundProps) {
-  const [gradientStops, setGradientStops] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!palette || palette.length === 0) {
-      // Default gradient when no palette
-      setGradientStops([
-        'from-blue-50',
-        'via-slate-50',
-        'to-emerald-50',
-        'dark:from-slate-900',
-        'dark:via-slate-800/50',
-        'dark:to-slate-900'
-      ]);
-      return;
-    }
-
-    // Extract hex colors and create gradient
-    const colors = palette.map(entry => entry.hex);
-
-    // Create a dynamic gradient based on palette
-    // We'll use the colors with reduced opacity to maintain readability
-    const lightGradient = colors.map((color, i) => {
-      const opacity = Math.round(intensity * 100);
-      const position = i === 0 ? 'from' : i === Math.floor(colors.length / 2) ? 'via' : 'to';
-      return `${position}-[${color}${opacity.toString(16).padStart(2, '0')}]`;
-    });
-
-    // For dark mode, use darker versions
-    const darkGradient = colors.map((color, i) => {
-      const position = i === 0 ? 'dark:from' : i === Math.floor(colors.length / 2) ? 'dark:via' : 'dark:to';
-      return `${position}-[${color}20]`; // 20 = low opacity in hex
-    });
-
-    setGradientStops([...lightGradient, ...darkGradient]);
-  }, [palette, intensity]);
-
   if (!palette || palette.length === 0) {
     return (
       <div className="fixed inset-0 -z-10 bg-gradient-to-br from-blue-50 via-slate-50 to-emerald-50 dark:from-slate-900 dark:via-slate-800/50 dark:to-slate-900" />

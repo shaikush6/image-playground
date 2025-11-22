@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Camera, Video, Layers, Sparkles, Clock, Users, Images } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 
 export type OutputFormat = 'image' | 'video' | 'series' | 'combined' | 'image-series';
 
@@ -76,7 +76,6 @@ export function OutputFormatSelector({
   onSelectionChange, 
   isGenerating = false 
 }: OutputFormatSelectorProps) {
-  const [hoveredOption, setHoveredOption] = useState<OutputFormat | null>(null);
 
   const toggleFormat = useCallback((format: OutputFormat) => {
     if (isGenerating) return;
@@ -148,7 +147,6 @@ export function OutputFormatSelector({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {OUTPUT_OPTIONS.map((option) => {
           const isSelected = selectedFormats.includes(option.id);
-          const isHovered = hoveredOption === option.id;
           
           return (
             <Card
@@ -159,8 +157,6 @@ export function OutputFormatSelector({
                   : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md'
               } ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={() => toggleFormat(option.id)}
-              onMouseEnter={() => setHoveredOption(option.id)}
-              onMouseLeave={() => setHoveredOption(null)}
             >
               <CardContent className="p-6">
                 {/* Header with Icon and Badge */}

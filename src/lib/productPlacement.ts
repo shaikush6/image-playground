@@ -1,11 +1,13 @@
 /**
  * Product Placement Service
  *
- * Handles product placement in environments using Google Imagen 3
+ * Handles product placement in environments using Gemini V2 (Pro/Flash)
+ * with fallback to DALL-E and mock mode
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getVariationById } from '@/config/environments';
+import { placeProductInEnvironment, GEMINI_MODELS } from './geminiV2';
+import type { GeminiModelType } from './geminiV2';
 
 export interface ProductPlacementOptions {
   productImage: string; // base64 encoded image with background removed
@@ -14,7 +16,13 @@ export interface ProductPlacementOptions {
   customPrompt?: string;
   aspectRatio?: '1:1' | '16:9' | '9:16' | '4:5' | '2:3' | '3:2' | '21:9' | '4:3';
   productDescription?: string; // Optional description of the product
+  model?: GeminiModelType; // 'flash' or 'pro' - defaults to 'pro'
+  colorPalette?: string[];
 }
+
+// Re-export model types for UI consumption
+export { GEMINI_MODELS };
+export type { GeminiModelType };
 
 export interface ProductPlacementResult {
   success: boolean;
@@ -25,7 +33,7 @@ export interface ProductPlacementResult {
 }
 
 /**
- * Generate product placement image using Google Imagen 3
+ * Generate product placement image using Gemini V2 (Pro/Flash)
  */
 export async function generateProductPlacement(
   options: ProductPlacementOptions
@@ -33,10 +41,20 @@ export async function generateProductPlacement(
   try {
     // Build the prompt
     const prompt = buildPrompt(options);
+    const { productImage, productDescription, model = 'pro' } = options;
 
-    // Try OpenAI DALL-E first (if available)
+    // Try Gemini V2 first (with product image for in-context placement)
+    if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      const geminiResult = await tryGeminiV2(prompt, productImage, productDescription, model);
+      if (geminiResult.success) {
+        return geminiResult;
+      }
+      console.warn('Gemini V2 generation failed:', geminiResult.error);
+    }
+
+    // Try OpenAI DALL-E second (if available) - prompt-only, no product image
     if (process.env.OPENAI_API_KEY) {
-      const dalleResult = await tryDALLE(prompt, options);
+      const dalleResult = await tryDALLE(prompt);
       if (dalleResult.success) {
         return dalleResult;
       }
@@ -44,7 +62,7 @@ export async function generateProductPlacement(
     }
 
     // Fallback to mock/demonstration mode
-    return generateMockPlacement(prompt, options);
+    return generateMockPlacement(prompt);
   } catch (error) {
     console.error('Product placement error:', error);
     return {
@@ -55,12 +73,43 @@ export async function generateProductPlacement(
 }
 
 /**
+ * Try Gemini V2 for image generation with product image context
+ */
+async function tryGeminiV2(
+  prompt: string,
+  productImage: string,
+  productDescription: string | undefined,
+  model: GeminiModelType
+): Promise<ProductPlacementResult> {
+  try {
+    const result = await placeProductInEnvironment(
+      productImage,
+      prompt,
+      productDescription,
+      { model }
+    );
+
+    if (result.success && result.imageData) {
+      return {
+        success: true,
+        imageData: result.imageData,
+        promptUsed: prompt,
+      };
+    }
+
+    throw new Error(result.error || 'No image data from Gemini V2');
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Try DALL-E 3 for image generation
  */
-async function tryDALLE(
-  prompt: string,
-  options: ProductPlacementOptions
-): Promise<ProductPlacementResult> {
+async function tryDALLE(prompt: string): Promise<ProductPlacementResult> {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -120,21 +169,18 @@ async function tryDALLE(
  * Generate a simple 1x1 purple pixel as placeholder
  * Shows the feature works - just needs proper API configuration
  */
-async function generateMockPlacement(
-  prompt: string,
-  options: ProductPlacementOptions
-): Promise<ProductPlacementResult> {
+async function generateMockPlacement(prompt: string): Promise<ProductPlacementResult> {
   // Create a simple 1x1 purple pixel as base64
   // This proves the entire flow works - we just need proper image generation API
   const purplePixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
   console.log('📝 Mock mode active - Image generation would use this prompt:', prompt);
-  console.log('💡 To enable: Add OPENAI_API_KEY to .env.local for DALL-E 3 generation');
+  console.log('💡 To enable: Add OPENAI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY to .env.local');
 
   return {
     success: true,
     imageData: purplePixel,
-    promptUsed: prompt + ' [DEMO MODE: Add OPENAI_API_KEY for actual generation]',
+    promptUsed: prompt + ' [DEMO MODE: Add API Key for actual generation]',
   };
 }
 
@@ -142,11 +188,11 @@ async function generateMockPlacement(
  * Build prompt from options
  */
 function buildPrompt(options: ProductPlacementOptions): string {
-  const { categoryId, variationId, customPrompt, productDescription } = options;
+  const { categoryId, variationId, customPrompt, productDescription, colorPalette } = options;
 
   // If custom prompt is provided, use it
   if (customPrompt && customPrompt.trim()) {
-    return enhanceCustomPrompt(customPrompt, productDescription);
+    return enhanceCustomPrompt(customPrompt, productDescription, colorPalette);
   }
 
   // Otherwise, use the variation template
@@ -165,6 +211,9 @@ function buildPrompt(options: ProductPlacementOptions): string {
 
   // Add quality and technical parameters
   prompt += ', professional photography, high resolution, detailed, sharp focus, commercial quality';
+  if (colorPalette?.length) {
+    prompt += `. Palette cues: ${colorPalette.join(', ')} applied to lighting, props, and set design`;
+  }
 
   return prompt;
 }
@@ -172,12 +221,16 @@ function buildPrompt(options: ProductPlacementOptions): string {
 /**
  * Enhance custom prompt with quality parameters
  */
-function enhanceCustomPrompt(customPrompt: string, productDescription?: string): string {
+function enhanceCustomPrompt(customPrompt: string, productDescription?: string, colorPalette?: string[]): string {
   let prompt = customPrompt;
 
   // Add product description context if provided
   if (productDescription) {
     prompt = `${productDescription} ${prompt}`;
+  }
+
+  if (colorPalette?.length) {
+    prompt = `${prompt}, color story inspired by ${colorPalette.join(', ')} guiding lighting and art direction`;
   }
 
   // Add quality parameters if not already present

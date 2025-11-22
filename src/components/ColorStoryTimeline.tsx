@@ -8,6 +8,7 @@ import {
   Sparkles,
   Check
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ColorStoryTimelineProps {
@@ -19,7 +20,7 @@ interface TimelineStep {
   id: string;
   label: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   bgColor: string;
 }
@@ -81,7 +82,6 @@ export function ColorStoryTimeline({ currentStep, compact = false }: ColorStoryT
           const Icon = step.icon;
           const isActive = index === currentIndex;
           const isCompleted = index < currentIndex;
-          const isUpcoming = index > currentIndex;
 
           return (
             <div key={step.id} className="flex items-center">
@@ -159,7 +159,6 @@ export function ColorStoryTimeline({ currentStep, compact = false }: ColorStoryT
             const Icon = step.icon;
             const isActive = index === currentIndex;
             const isCompleted = index < currentIndex;
-            const isUpcoming = index > currentIndex;
 
             return (
               <motion.div
@@ -233,7 +232,7 @@ export function ColorStoryTimeline({ currentStep, compact = false }: ColorStoryT
                       className="mt-4 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-blue-950/50 dark:to-emerald-950/50 border border-blue-200 dark:border-blue-800"
                     >
                       <p className="text-sm text-blue-700 dark:text-blue-300">
-                        You're currently at this step in your creative journey. Complete this to move forward!
+                        You&apos;re currently at this step in your creative journey. Complete this to move forward!
                       </p>
                     </motion.div>
                   )}

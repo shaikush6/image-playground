@@ -4,7 +4,7 @@ import { removeBackground } from '@/lib/backgroundRemoval';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageData, format, size } = body;
+    const { imageData, format, size, model = 'pro', productDescription } = body;
 
     if (!imageData) {
       return NextResponse.json(
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Remove background
-    const result = await removeBackground(imageData, { format, size });
+    const result = await removeBackground(imageData, { format, size, model, productDescription });
 
     if (!result.success) {
       return NextResponse.json(

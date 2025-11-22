@@ -17,12 +17,14 @@ import {
   Mail,
   Download
 } from 'lucide-react';
+import type { PaletteOutput } from '@/lib/anthropic';
+import type { CreativeResult } from '@/lib/agents';
 
 interface SessionSharingProps {
   sessionId: string;
-  palette: any;
+  palette: PaletteOutput | null;
   creativePath: string;
-  result?: any;
+  result?: CreativeResult | null;
 }
 
 export function SessionSharing({ sessionId, palette, creativePath, result }: SessionSharingProps) {
@@ -32,6 +34,7 @@ export function SessionSharing({ sessionId, palette, creativePath, result }: Ses
   const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/session/${sessionId}`;
 
   const copyToClipboard = () => {
+    if (typeof navigator === 'undefined') return;
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

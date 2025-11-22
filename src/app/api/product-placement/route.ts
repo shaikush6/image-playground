@@ -4,6 +4,7 @@ import {
   enhancePromptWithClaude,
   ProductPlacementOptions,
 } from '@/lib/productPlacement';
+import { recordGeneratedAsset } from '@/lib/persistence';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,9 @@ export async function POST(request: NextRequest) {
       aspectRatio,
       productDescription,
       enhanceWithClaude = false,
+      model = 'pro', // 'flash' or 'pro'
+      sessionId,
+      colorPalette,
     } = body;
 
     // Validate required fields
@@ -48,6 +52,8 @@ export async function POST(request: NextRequest) {
       customPrompt,
       aspectRatio,
       productDescription,
+      model,
+      colorPalette,
     };
 
     // Optionally enhance prompt with Claude
@@ -65,6 +71,30 @@ export async function POST(request: NextRequest) {
         { error: result.error || 'Product placement generation failed' },
         { status: 500 }
       );
+    }
+
+    if (result.success) {
+      try {
+        await recordGeneratedAsset({
+          sessionKey: sessionId,
+          appMode: 'product',
+          kind: 'image',
+          source: 'product-placement',
+          url: result.imageUrl,
+          dataUrl: result.imageData,
+          prompt: result.promptUsed,
+          metadata: {
+            categoryId,
+            variationId,
+            aspectRatio,
+            productDescription,
+            model,
+            colorPalette,
+          },
+        });
+      } catch (persistError) {
+        console.error('Failed to persist product image asset', persistError);
+      }
     }
 
     return NextResponse.json({

@@ -1,9 +1,12 @@
 /**
  * Background Removal Service
  *
- * Handles object extraction and background removal using WithoutBG API
- * Falls back to client-side processing if API is unavailable
+ * Primary: Gemini Pro for AI-powered background removal
+ * Fallbacks: WithoutBG API, OpenAI DALL-E, original image
  */
+
+import { removeBackgroundWithGemini } from './geminiV2';
+import type { GeminiModelType } from './geminiV2';
 
 export interface BackgroundRemovalResult {
   success: boolean;
@@ -12,18 +15,23 @@ export interface BackgroundRemovalResult {
   error?: string;
 }
 
+export interface BackgroundRemovalOptions {
+  format?: 'png' | 'jpg';
+  size?: 'preview' | 'medium' | 'full';
+  model?: GeminiModelType; // 'flash' or 'pro' - defaults to 'pro'
+  productDescription?: string;
+}
+
 /**
  * Remove background from image with cascading fallbacks
- * 1. WithoutBG API (primary)
- * 2. OpenAI DALL-E (fallback 1)
- * 3. Google Gemini Nano (fallback 2)
+ * 1. Gemini Pro (primary - AI-powered background removal)
+ * 2. WithoutBG API (fallback 1)
+ * 3. OpenAI DALL-E (fallback 2)
+ * 4. Original image (last resort)
  */
 export async function removeBackground(
   imageFile: File | string,
-  options?: {
-    format?: 'png' | 'jpg';
-    size?: 'preview' | 'medium' | 'full';
-  }
+  options?: BackgroundRemovalOptions
 ): Promise<BackgroundRemovalResult> {
   // Convert image to base64 or get data URL
   let imageData: string;
@@ -33,12 +41,27 @@ export async function removeBackground(
     imageData = imageFile;
   }
 
-  // Remove data URL prefix if present to get pure base64
+  // Ensure we have a data URL format for Gemini
+  const imageDataUrl = imageData.includes('data:')
+    ? imageData
+    : `data:image/png;base64,${imageData}`;
+
+  // Remove data URL prefix if present to get pure base64 (for WithoutBG)
   const base64Image = imageData.includes('base64,')
     ? imageData.split('base64,')[1]
     : imageData;
 
-  // Try WithoutBG first (if configured)
+  // Try Gemini Pro first (primary - AI-powered background removal)
+  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    const geminiResult = await tryGeminiPro(imageDataUrl, options);
+    if (geminiResult.success) {
+      console.log('✓ Background removed using Gemini Pro');
+      return geminiResult;
+    }
+    console.warn('✗ Gemini Pro failed:', geminiResult.error);
+  }
+
+  // Fallback to WithoutBG (if configured)
   if (process.env.WITHOUTBG_API_KEY) {
     const withoutBgResult = await tryWithoutBG(base64Image, options);
     if (withoutBgResult.success) {
@@ -50,7 +73,7 @@ export async function removeBackground(
 
   // Fallback to OpenAI (if configured)
   if (process.env.OPENAI_API_KEY) {
-    const openAIResult = await tryOpenAI(imageData);
+    const openAIResult = await tryOpenAI(imageDataUrl);
     if (openAIResult.success) {
       console.log('✓ Background removed using OpenAI');
       return openAIResult;
@@ -58,23 +81,43 @@ export async function removeBackground(
     console.warn('✗ OpenAI failed:', openAIResult.error);
   }
 
-  // Fallback to Google Gemini vision (simpler approach)
-  if (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY) {
-    const geminiResult = await tryGeminiVision(imageData);
-    if (geminiResult.success) {
-      console.log('✓ Background removed using Gemini Vision');
-      return geminiResult;
-    }
-    console.warn('✗ Gemini Vision failed:', geminiResult.error);
-  }
-
   // Last resort: Return original image with instructions to manually remove background
   console.warn('⚠️ No background removal service available - using original image');
   return {
     success: true,
-    imageData: imageData,
+    imageData: imageDataUrl,
     error: 'Background removal services unavailable. Please use an image with transparent background or configure API keys.',
   };
+}
+
+/**
+ * Try Gemini Pro for AI-powered background removal
+ */
+async function tryGeminiPro(
+  imageDataUrl: string,
+  options?: BackgroundRemovalOptions
+): Promise<BackgroundRemovalResult> {
+  try {
+    const result = await removeBackgroundWithGemini(
+      imageDataUrl,
+      options?.productDescription,
+      { model: options?.model || 'pro' }
+    );
+
+    if (result.success && result.imageData) {
+      return {
+        success: true,
+        imageData: result.imageData,
+      };
+    }
+
+    throw new Error(result.error || 'No image returned from Gemini');
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }
 
 /**
@@ -104,6 +147,7 @@ async function tryWithoutBG(
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('WithoutBG API error response:', errorText);
       throw new Error(`WithoutBG API error: ${response.status}`);
     }
 
@@ -181,60 +225,6 @@ async function tryOpenAI(imageDataUrl: string): Promise<BackgroundRemovalResult>
     }
 
     throw new Error('No image URL in response');
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
-}
-
-/**
- * Try Google Gemini Vision (simpler approach - just analyze and return original)
- */
-async function tryGeminiVision(imageDataUrl: string): Promise<BackgroundRemovalResult> {
-  try {
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      throw new Error('Google API key not configured');
-    }
-
-    const base64Image = imageDataUrl.split('base64,')[1] || imageDataUrl;
-
-    // Just verify the image is readable - return original
-    // (Actual background removal via Imagen would require different API structure)
-    const analyzeResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: 'Is this image clear and suitable for product photography? Answer yes or no.' },
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: base64Image
-                }
-              }
-            ]
-          }]
-        }),
-      }
-    );
-
-    if (!analyzeResponse.ok) {
-      throw new Error(`Gemini analysis error: ${analyzeResponse.status}`);
-    }
-
-    // If we got here, image is analyzable - return it
-    // (Background removal would happen in a separate service)
-    return {
-      success: true,
-      imageData: imageDataUrl,
-      error: 'Using original image (background removal unavailable)',
-    };
   } catch (error) {
     return {
       success: false,

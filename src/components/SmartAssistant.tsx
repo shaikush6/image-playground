@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   Heart,
-  Palette
 } from 'lucide-react';
 import { PaletteEntry } from '@/lib/anthropic';
+import type { LucideIcon } from 'lucide-react';
 
 interface SmartAssistantProps {
   palette: PaletteEntry[];
@@ -26,7 +26,7 @@ interface SmartAssistantProps {
 
 interface Suggestion {
   type: 'trend' | 'psychology' | 'recommendation' | 'tip';
-  icon: any;
+  icon: LucideIcon;
   title: string;
   content: string;
   action?: string;
@@ -38,7 +38,7 @@ export function SmartAssistant({ palette, creativePath, onSuggestionClick }: Sma
   const [activeTab, setActiveTab] = useState<'all' | 'tips' | 'insights'>('all');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
-  const analyzePalette = (): Suggestion[] => {
+  const suggestions = useMemo(() => {
     const suggestions: Suggestion[] = [];
 
     // Analyze dominant colors
@@ -118,7 +118,7 @@ export function SmartAssistant({ palette, creativePath, onSuggestionClick }: Sma
     }
 
     return suggestions;
-  };
+  }, [palette, creativePath]);
 
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -130,12 +130,6 @@ export function SmartAssistant({ palette, creativePath, onSuggestionClick }: Sma
         }
       : { r: 0, g: 0, b: 0 };
   };
-
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-
-  useEffect(() => {
-    setSuggestions(analyzePalette());
-  }, [palette, creativePath]);
 
   const filteredSuggestions = suggestions.filter(s => {
     if (dismissedSuggestions.has(s.title)) return false;

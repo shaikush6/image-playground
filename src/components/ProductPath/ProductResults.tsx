@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, Eye } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -95,11 +96,14 @@ export function ProductResults({
 
       {/* Image Display */}
       <div className="relative group">
-        <div className="aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700">
-          <img
-            src={result.imageData || result.imageUrl}
+        <div className="aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 relative">
+          <Image
+            src={result.imageData || result.imageUrl || ''}
             alt="Generated Product Placement"
-            className="w-full h-full object-contain"
+            fill
+            unoptimized
+            sizes="(max-width: 1024px) 100vw, 900px"
+            className="object-contain"
           />
         </div>
 
@@ -132,11 +136,11 @@ export function ProductResults({
       {/* Before/After Toggle (optional future enhancement) */}
       {/* <div className="flex gap-4">
         <button className="flex-1 p-4 rounded-lg border-2 border-purple-500 bg-purple-50 dark:bg-purple-950/30">
-          <img src={result.originalProduct} className="w-full h-40 object-contain" />
+          <Image src={result.originalProduct || ''} alt="Original product" width={320} height={160} unoptimized className="w-full h-40 object-contain" />
           <p className="text-sm font-medium mt-2">Original</p>
         </button>
         <button className="flex-1 p-4 rounded-lg border-2 border-slate-200 dark:border-slate-700 hover:border-purple-500">
-          <img src={result.imageUrl} className="w-full h-40 object-contain" />
+          <Image src={result.imageUrl || ''} alt="Generated product" width={320} height={160} unoptimized className="w-full h-40 object-contain" />
           <p className="text-sm font-medium mt-2">Generated</p>
         </button>
       </div> */}

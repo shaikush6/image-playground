@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Progress } from '@/components/ui/progress';
 import {
   Palette,
@@ -12,6 +12,7 @@ import {
   Sparkles,
   Check
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { PaletteEntry } from '@/lib/anthropic';
 
 interface EnhancedGenerationProgressProps {
@@ -25,7 +26,7 @@ interface GenerationStage {
   id: string;
   label: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   progressRange: [number, number];
   colors?: string[];
 }
@@ -39,8 +40,7 @@ export function EnhancedGenerationProgress({
   const [currentStage, setCurrentStage] = useState(0);
   const [activeColors, setActiveColors] = useState<string[]>([]);
 
-  // Define generation stages
-  const stages: GenerationStage[] = [
+  const stages: GenerationStage[] = useMemo(() => [
     {
       id: 'analyzing',
       label: 'Analyzing Palette',
@@ -73,7 +73,7 @@ export function EnhancedGenerationProgress({
       progressRange: [85, 100],
       colors: palette?.map(p => p.hex),
     },
-  ];
+  ], [palette, formats]);
 
   // Update current stage based on progress
   useEffect(() => {
@@ -86,7 +86,7 @@ export function EnhancedGenerationProgress({
         setActiveColors(stages[stage].colors || []);
       }
     }
-  }, [progress]);
+  }, [progress, stages]);
 
   // Calculate estimated time remaining
   const estimatedMinutes = Math.max(1, Math.ceil((100 - progress) / 20));

@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { Camera, Video, Download, Heart, Share2, Maximize2 } from 'lucide-react';
+import Image from 'next/image';
+import { Camera, Video, Heart, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,7 +22,6 @@ interface MasonryResultsGridProps {
 
 export function MasonryResultsGrid({ items, onItemClick }: MasonryResultsGridProps) {
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set());
-  const [loadedItems, setLoadedItems] = useState<Set<string>>(new Set());
 
   const toggleLike = (id: string) => {
     setLikedItems(prev => {
@@ -48,12 +48,16 @@ export function MasonryResultsGrid({ items, onItemClick }: MasonryResultsGridPro
           <div className="group relative overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800 shadow-lg hover:shadow-2xl transition-all duration-300">
             {/* Content */}
             {item.type === 'image' ? (
-              <img
-                src={item.url}
-                alt={item.title}
-                className="w-full h-auto"
-                onLoad={() => setLoadedItems(prev => new Set(prev).add(item.id))}
-              />
+              <div className="relative w-full min-h-[200px]">
+                <Image
+                  src={item.url}
+                  alt={item.title}
+                  fill
+                  unoptimized
+                  sizes="(max-width: 768px) 100vw, 400px"
+                  className="object-cover"
+                />
+              </div>
             ) : (
               <video
                 src={item.url}
@@ -63,7 +67,6 @@ export function MasonryResultsGrid({ items, onItemClick }: MasonryResultsGridPro
                 playsInline
                 loop
                 muted
-                onLoadedData={() => setLoadedItems(prev => new Set(prev).add(item.id))}
               />
             )}
 

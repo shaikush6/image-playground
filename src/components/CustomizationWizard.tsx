@@ -115,10 +115,6 @@ export function CustomizationWizard({
     setShowGeneratedCombo(true);
   };
 
-  const getModeIcon = (m: WizardMode) => {
-    return m === 'simple' ? Zap : Settings;
-  };
-
   return (
     <div className="space-y-6">
       {/* Mode Selector */}
@@ -219,7 +215,7 @@ export function CustomizationWizard({
               </motion.div>
               <h3 className="text-xl font-semibold mb-2">AI-Powered Smart Selection</h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                We'll automatically choose the best settings based on your color palette's mood and characteristics.
+                We&apos;ll automatically choose the best settings based on your color palette&apos;s mood and characteristics.
                 Just sit back and let the AI work its magic!
               </p>
 

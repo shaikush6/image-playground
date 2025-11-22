@@ -15,6 +15,7 @@ import {
   PartyPopper,
   Laptop
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface EnhancedCreativePathSelectorProps {
   paths: readonly string[];
@@ -23,7 +24,7 @@ interface EnhancedCreativePathSelectorProps {
   disabled?: boolean;
 }
 
-const pathIcons: Record<string, any> = {
+const pathIcons: Record<string, LucideIcon> = {
   '🍽️ Cooking': ChefHat,
   '👗 Fashion': Shirt,
   '🛋️ Interior Design': Home,

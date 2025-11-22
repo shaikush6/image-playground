@@ -1,19 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Palette, Sparkles, Wand2, BookOpen, Share2, Loader2 } from 'lucide-react';
+import { Palette, Sparkles, Wand2, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageUpload } from '@/components/ImageUpload';
 import { ColorPalette } from '@/components/ColorPalette';
 import { OutputFormatSelector, OutputFormat } from '@/components/OutputFormatSelector';
 import { CreativeResults } from '@/components/CreativeResults';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { PaletteOutput } from '@/lib/anthropic';
+import { PaletteOutput, PaletteEntry } from '@/lib/anthropic';
 import { CREATIVE_PATHS, IMAGE_PROMPT_OPTIONS, CreativeCustomizations, CreativeResult } from '@/lib/agents';
 import { useAspectRatio } from '@/features/aspect-ratio/useAspectRatio';
 import { useImageSeries } from '@/features/image-series/useImageSeries';
@@ -30,16 +29,111 @@ import { PalettePlayground } from '@/components/PalettePlayground';
 import { ColorStoryMode } from '@/components/ColorStoryMode';
 import { SessionSharing } from '@/components/SessionSharing';
 import { AnimatedJourneyShowcase } from '@/components/AnimatedJourneyShowcase';
-import { usePaletteHistory } from '@/hooks/usePaletteHistory';
-import { ProductModeToggle } from '@/components/ProductPath/ProductModeToggle';
+import { ModeToggle } from '@/components/ModeToggle';
 import { ProductUpload } from '@/components/ProductPath/ProductUpload';
 import { EnvironmentCategorySelector } from '@/components/ProductPath/EnvironmentCategorySelector';
-import { EnvironmentCustomizationPanel } from '@/components/ProductPath/EnvironmentCustomizationPanel';
-import { ProductResults } from '@/components/ProductPath/ProductResults';
-import { getCategoryById, getVariationById } from '@/config/environments';
+import { ProductGenerationConfig, SceneConfig, ProductOutputFormat } from '@/components/ProductPath/ProductGenerationConfig';
+import { ProductResultsGrid, ProductResultItem } from '@/components/ProductPath/ProductResultsGrid';
+import { ProductColorPaletteSelector } from '@/components/ProductPath/ProductColorPaletteSelector';
+import { getCategoryById } from '@/config/environments';
+import { ModelToggle } from '@/components/ModelToggle';
+import type { GeminiModelType } from '@/lib/geminiV2';
+import { EventDetailsForm } from '@/components/InvitationPath/EventDetailsForm';
+import { InvitationCategorySelector } from '@/components/InvitationPath/InvitationCategorySelector';
+import { InvitationStylePanel } from '@/components/InvitationPath/InvitationStylePanel';
+import { InvitationPreview } from '@/components/InvitationPath/InvitationPreview';
+import { InvitationResultsGrid, InvitationResultItem } from '@/components/InvitationPath/InvitationResultsGrid';
+import {
+  INVITATION_CATEGORIES,
+  EventDetails as InvitationDetails,
+  InvitationAspectRatio,
+  getInvitationCategoryById as getInvitationCategory,
+  getInvitationStyleById as getInvitationStyle,
+} from '@/config/invitations';
+import { InvitationTemplateGallery } from '@/components/InvitationPath/InvitationTemplateGallery';
+import { getTemplatesForCategory, getTemplateById } from '@/config/invitationTemplates';
+import { InvitationColorSelector } from '@/components/InvitationPath/InvitationColorSelector';
+import { InvitationVariationSelector } from '@/components/InvitationPath/InvitationVariationSelector';
+import { INVITATION_VARIATIONS } from '@/config/invitationVariations';
+import { AssetLibrarySheet, AssetItem } from '@/components/AssetLibrarySheet';
+import { ProductJourneyShowcase } from '@/components/ProductJourneyShowcase';
+import { InvitationJourneyShowcase } from '@/components/InvitationJourneyShowcase';
 
 type CreativePath = typeof CREATIVE_PATHS[number];
-type AppMode = 'color' | 'product';
+type AppMode = 'color' | 'product' | 'invitation';
+type InvitationOutputFormat = 'image' | 'video';
+type InvitationGenerationResponse = {
+  error?: string;
+  results?: Array<{
+    id?: string;
+    imageUrl?: string;
+    imageData?: string;
+    promptUsed?: string;
+    categoryName?: string;
+    styleName?: string;
+  }>;
+};
+type InvitationVideoResponse = {
+  error?: string;
+  id?: string;
+  videoUrl?: string;
+  promptUsed?: string;
+  categoryName?: string;
+  styleName?: string;
+};
+type SessionSnapshot = {
+  appMode: AppMode;
+  eventDetails: InvitationDetails;
+  selectedInvitationCategory: string;
+  selectedInvitationStyle: string;
+  invitationAspectRatio: InvitationAspectRatio;
+  invitationOutputFormats: InvitationOutputFormat[];
+  invitationVariantCount: number;
+  selectedScenes: SceneConfig[];
+  productOutputFormats: ProductOutputFormat[];
+  selectedInvitationTemplate?: string;
+  invitationColorPalette?: string[];
+  invitationVariationModes?: string[];
+  productColorPalette?: string[];
+};
+
+const SESSION_STORAGE_KEY = 'creative-studio-session';
+
+const INITIAL_EVENT_DETAILS: InvitationDetails = {
+  title: '',
+  subtitle: '',
+  date: '',
+  time: '',
+  location: '',
+  description: '',
+  hostName: '',
+  rsvpInfo: '',
+  moodKeywords: '',
+  dressCode: '',
+};
+
+
+const INVITATION_ASPECT_OPTIONS: InvitationAspectRatio[] = ['4:5', '3:2', '1:1', '9:16', '16:9'];
+
+const INVITATION_OUTPUT_OPTIONS: Array<{
+  id: InvitationOutputFormat;
+  label: string;
+  description: string;
+  accent: string;
+}> = [
+  {
+    id: 'image',
+    label: 'Static Image',
+    description: 'High-resolution PNG, perfect for print or social sharing',
+    accent: 'from-emerald-500 to-teal-500',
+  },
+  {
+    id: 'video',
+    label: 'Animated Loop',
+    description: 'Short Veo animation with dynamic typography',
+    accent: 'from-rose-500 to-amber-500',
+  },
+];
 
 export default function HomePage() {
   const [currentImage, setCurrentImage] = useState<string>('');
@@ -57,23 +151,227 @@ export default function HomePage() {
   // New feature states
   const [showPalettePlayground, setShowPalettePlayground] = useState(false);
   const [showColorStory, setShowColorStory] = useState(false);
-  const [showSessionSharing, setShowSessionSharing] = useState(false);
-  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isSessionHydrated, setIsSessionHydrated] = useState(false);
 
   // Product Path mode states
   const [appMode, setAppMode] = useState<AppMode>('color');
   const [productImage, setProductImage] = useState<string>('');
   const [extractedProduct, setExtractedProduct] = useState<string>('');
   const [isExtractingProduct, setIsExtractingProduct] = useState(false);
-  const [selectedEnvironmentCategory, setSelectedEnvironmentCategory] = useState<string>('');
-  const [selectedVariation, setSelectedVariation] = useState<string>('');
-  const [customEnvironmentPrompt, setCustomEnvironmentPrompt] = useState<string>('');
-  const [productResults, setProductResults] = useState<any>(null);
   const [isGeneratingProduct, setIsGeneratingProduct] = useState(false);
+
+  // Multi-scene product path states
+  const [selectedScenes, setSelectedScenes] = useState<SceneConfig[]>([]);
+  const [productOutputFormats, setProductOutputFormats] = useState<ProductOutputFormat[]>(['image']);
+  const [productResultItems, setProductResultItems] = useState<ProductResultItem[]>([]);
+  const [productGenerationProgress, setProductGenerationProgress] = useState({ current: 0, total: 0 });
+  const [productColorPalette, setProductColorPalette] = useState<string[]>([]);
+
+  // Invitation path states
+  const [eventDetails, setEventDetails] = useState<InvitationDetails>(() => ({ ...INITIAL_EVENT_DETAILS }));
+  const [selectedInvitationCategory, setSelectedInvitationCategory] = useState<string>('');
+  const [selectedInvitationStyle, setSelectedInvitationStyle] = useState<string>('');
+  const [invitationAspectRatio, setInvitationAspectRatio] = useState<InvitationAspectRatio>('4:5');
+  const [invitationOutputFormats, setInvitationOutputFormats] = useState<InvitationOutputFormat[]>(['image']);
+  const [invitationVariantCount, setInvitationVariantCount] = useState(3);
+  const [invitationResults, setInvitationResults] = useState<InvitationResultItem[]>([]);
+  const [isGeneratingInvitation, setIsGeneratingInvitation] = useState(false);
+  const [invitationGenerationProgress, setInvitationGenerationProgress] = useState({ current: 0, total: 0 });
+  const [selectedInvitationTemplate, setSelectedInvitationTemplate] = useState<string>('');
+  const [invitationColorPalette, setInvitationColorPalette] = useState<string[]>([]);
+  const [invitationVariationModes, setInvitationVariationModes] = useState<string[]>([]);
+
+  // Model selection state (applies to both paths)
+  const [selectedModel, setSelectedModel] = useState<GeminiModelType>('pro');
+
+  // Asset library state
+  const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false);
+  const [assetPickerTarget, setAssetPickerTarget] = useState<'color' | 'product'>('color');
 
   // Custom hooks for modular features
   const aspectRatio = useAspectRatio(selectedPath);
   const imageSeries = useImageSeries(selectedPath);
+  const invitationCategory = selectedInvitationCategory
+    ? getInvitationCategory(selectedInvitationCategory)
+    : undefined;
+  const invitationStyle = invitationCategory && selectedInvitationStyle
+    ? getInvitationStyle(selectedInvitationCategory, selectedInvitationStyle)
+    : undefined;
+  const invitationTemplate = selectedInvitationTemplate
+    ? getTemplateById(selectedInvitationTemplate)
+    : undefined;
+  const effectiveInvitationVariantCount = invitationVariationModes.length > 0
+    ? invitationVariationModes.length
+    : invitationVariantCount;
+  const appliedInvitationColors = invitationColorPalette.length > 0
+    ? invitationColorPalette
+    : invitationStyle?.colorScheme;
+  const invitationStylePaletteSignature = invitationStyle?.colorScheme?.join(',') ?? '';
+  const shouldAutoApplyStylePalette = Boolean(invitationStyle?.colorScheme && invitationColorPalette.length === 0);
+  const invitationCategoryId = invitationCategory?.id ?? '';
+  const canGenerateInvitations = Boolean(
+    eventDetails.title &&
+    eventDetails.date &&
+    invitationCategory &&
+    invitationStyle &&
+    invitationOutputFormats.length > 0
+  );
+
+  // Initialize session ID from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const existing = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (existing) {
+      setSessionId(existing);
+    } else {
+      const newId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      window.localStorage.setItem(SESSION_STORAGE_KEY, newId);
+      setSessionId(newId);
+    }
+  }, []);
+
+  // Hydrate last session snapshot
+  useEffect(() => {
+    if (!sessionId || !sessionId.length) return;
+    let cancelled = false;
+
+    const hydrate = async () => {
+      try {
+        const response = await fetch(`/api/session?sessionId=${sessionId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const snapshot = (data?.session?.state || null) as Partial<SessionSnapshot> | null;
+        if (!snapshot) return;
+
+        if (snapshot.appMode) setAppMode(snapshot.appMode);
+        if (snapshot.eventDetails) {
+          setEventDetails(prev => ({ ...prev, ...snapshot.eventDetails }));
+        }
+        if (typeof snapshot.selectedInvitationCategory === 'string') {
+          setSelectedInvitationCategory(snapshot.selectedInvitationCategory);
+        }
+        if (typeof snapshot.selectedInvitationStyle === 'string') {
+          setSelectedInvitationStyle(snapshot.selectedInvitationStyle);
+        }
+        if (snapshot.invitationAspectRatio) {
+          setInvitationAspectRatio(snapshot.invitationAspectRatio);
+        }
+        if (Array.isArray(snapshot.invitationOutputFormats) && snapshot.invitationOutputFormats.length > 0) {
+          setInvitationOutputFormats(snapshot.invitationOutputFormats as InvitationOutputFormat[]);
+        }
+        if (typeof snapshot.invitationVariantCount === 'number') {
+          setInvitationVariantCount(snapshot.invitationVariantCount);
+        }
+        if (Array.isArray(snapshot.selectedScenes)) {
+          setSelectedScenes(snapshot.selectedScenes as SceneConfig[]);
+        }
+        if (Array.isArray(snapshot.productOutputFormats) && snapshot.productOutputFormats.length > 0) {
+          setProductOutputFormats(snapshot.productOutputFormats as ProductOutputFormat[]);
+        }
+        if (Array.isArray(snapshot.productColorPalette)) {
+          setProductColorPalette(snapshot.productColorPalette as string[]);
+        }
+        if (typeof snapshot.selectedInvitationTemplate === 'string') {
+          setSelectedInvitationTemplate(snapshot.selectedInvitationTemplate);
+        }
+        if (Array.isArray(snapshot.invitationColorPalette)) {
+          setInvitationColorPalette(snapshot.invitationColorPalette as string[]);
+        }
+        if (Array.isArray(snapshot.invitationVariationModes)) {
+          setInvitationVariationModes(snapshot.invitationVariationModes as string[]);
+        }
+      } catch (error) {
+        console.error('Failed to hydrate session state', error);
+      } finally {
+        if (!cancelled) {
+          setIsSessionHydrated(true);
+        }
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (selectedInvitationTemplate && invitationCategoryId) {
+      const template = getTemplateById(selectedInvitationTemplate);
+      if (!template || template.categoryId !== invitationCategoryId) {
+        setSelectedInvitationTemplate('');
+      }
+    }
+  }, [selectedInvitationTemplate, invitationCategoryId]);
+
+  useEffect(() => {
+    if (shouldAutoApplyStylePalette && invitationStyle?.colorScheme) {
+      setInvitationColorPalette(invitationStyle.colorScheme.slice(0, 4));
+    }
+  }, [shouldAutoApplyStylePalette, invitationStylePaletteSignature, invitationStyle]);
+
+  // Persist snapshot when key inputs change
+  useEffect(() => {
+    if (!sessionId || !isSessionHydrated) return;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      const payload: SessionSnapshot = {
+        appMode,
+        eventDetails,
+        selectedInvitationCategory,
+        selectedInvitationStyle,
+        invitationAspectRatio,
+        invitationOutputFormats,
+        invitationVariantCount,
+        selectedScenes,
+        productOutputFormats,
+        selectedInvitationTemplate,
+        invitationColorPalette,
+        invitationVariationModes,
+        productColorPalette,
+      };
+
+      fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          mode: appMode,
+          state: payload,
+        }),
+        signal: controller.signal,
+      }).catch(error => {
+        if (error && typeof error === 'object' && 'name' in error && (error as DOMException).name === 'AbortError') {
+          return;
+        }
+        console.error('Failed to persist session state', error);
+      });
+    }, 1200);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [
+    sessionId,
+    isSessionHydrated,
+    appMode,
+    eventDetails,
+    selectedInvitationCategory,
+    selectedInvitationStyle,
+    invitationAspectRatio,
+    invitationOutputFormats,
+    invitationVariantCount,
+    selectedScenes,
+    productOutputFormats,
+    selectedInvitationTemplate,
+    invitationColorPalette,
+    invitationVariationModes,
+    productColorPalette,
+  ]);
 
   const extractPalette = async () => {
     if (!currentImage) return;
@@ -274,9 +572,8 @@ export default function HomePage() {
     } else {
       // Reset when image is removed
       setExtractedProduct('');
-      setSelectedEnvironmentCategory('');
-      setSelectedVariation('');
-      setProductResults(null);
+      setSelectedScenes([]);
+      setProductResultItems([]);
     }
   };
 
@@ -286,7 +583,7 @@ export default function HomePage() {
       const response = await fetch('/api/remove-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData }),
+        body: JSON.stringify({ imageData, model: selectedModel }),
       });
 
       if (response.ok) {
@@ -304,61 +601,319 @@ export default function HomePage() {
     }
   };
 
-  const generateProductPlacement = async () => {
-    if (!extractedProduct || !selectedEnvironmentCategory) return;
+  const resetColorExperience = () => {
+    setPalette(null);
+    setResults(null);
+  };
 
-    setIsGeneratingProduct(true);
-    setProductResults(null);
+  const resetProductExperience = () => {
+    setProductImage('');
+    setExtractedProduct('');
+    setSelectedScenes([]);
+    setProductResultItems([]);
+    setProductColorPalette([]);
+  };
 
-    try {
-      const response = await fetch('/api/product-placement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productImage: extractedProduct,
-          categoryId: selectedEnvironmentCategory,
-          variationId: selectedVariation || undefined,
-          customPrompt: customEnvironmentPrompt || undefined,
-          aspectRatio: aspectRatio.imageAspectRatio,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const category = getCategoryById(selectedEnvironmentCategory);
-        const variation = selectedVariation ? getVariationById(selectedEnvironmentCategory, selectedVariation) : null;
-
-        setProductResults({
-          imageUrl: result.imageUrl,
-          imageData: result.imageData,
-          promptUsed: result.promptUsed,
-          categoryName: category?.name || 'Unknown',
-          variationName: variation?.name,
-          aspectRatio: aspectRatio.imageAspectRatio,
-        });
-      } else {
-        console.error('Failed to generate product placement');
-        alert('Failed to generate product placement. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error generating product placement:', error);
-      alert('Error generating product placement. Please try again.');
-    } finally {
-      setIsGeneratingProduct(false);
-    }
+  const resetInvitationExperience = () => {
+    setInvitationResults([]);
+    setInvitationGenerationProgress({ current: 0, total: 0 });
   };
 
   const handleModeChange = (mode: AppMode) => {
     setAppMode(mode);
-    // Reset state when switching modes
     if (mode === 'color') {
-      setProductImage('');
-      setExtractedProduct('');
-      setSelectedEnvironmentCategory('');
-      setProductResults(null);
+      resetProductExperience();
+      resetInvitationExperience();
+    } else if (mode === 'product') {
+      resetColorExperience();
+      resetInvitationExperience();
     } else {
-      setPalette(null);
-      setResults(null);
+      resetColorExperience();
+      resetProductExperience();
+    }
+  };
+
+  // Handler for multi-scene selection
+  const handleScenesChange = (categoryIds: string[]) => {
+    setSelectedScenes(
+      categoryIds.map(id => ({
+        categoryId: id,
+        imageCount: 1,
+      }))
+    );
+    setProductResultItems([]);
+  };
+
+  const handleAssetSelect = (asset: AssetItem) => {
+    const assetData = asset.data_url || asset.url || '';
+    if (!assetData) return;
+    if (assetPickerTarget === 'color') {
+      setCurrentImage(assetData);
+    } else {
+      setProductImage(assetData);
+      setExtractedProduct('');
+    }
+  };
+
+  const handleInvitationCategorySelect = (categoryId: string) => {
+    setSelectedInvitationCategory(categoryId);
+    setSelectedInvitationStyle('');
+    setInvitationResults([]);
+
+    const category = getInvitationCategory(categoryId);
+    if (category?.suggestedAspectRatios.length) {
+      const [firstRatio] = category.suggestedAspectRatios;
+      if (firstRatio) {
+        const candidate = firstRatio as InvitationAspectRatio;
+        if (INVITATION_ASPECT_OPTIONS.includes(candidate)) {
+          setInvitationAspectRatio(candidate);
+        }
+      }
+    }
+  };
+
+  const handleInvitationStyleSelect = (styleId: string) => {
+    setSelectedInvitationStyle(styleId);
+    setInvitationResults([]);
+    setSelectedInvitationTemplate('');
+    setInvitationVariationModes([]);
+    setInvitationColorPalette([]);
+  };
+
+  const toggleInvitationFormat = (format: InvitationOutputFormat) => {
+    if (invitationOutputFormats.includes(format)) {
+      setInvitationOutputFormats(invitationOutputFormats.filter(f => f !== format));
+    } else {
+      setInvitationOutputFormats([...invitationOutputFormats, format]);
+    }
+  };
+
+  // Generate multiple product placements
+  const generateMultipleProductPlacements = async () => {
+    if (!extractedProduct || selectedScenes.length === 0 || productOutputFormats.length === 0) return;
+
+    setIsGeneratingProduct(true);
+    setProductResultItems([]);
+
+    const totalImages = productOutputFormats.includes('image')
+      ? selectedScenes.reduce((sum, scene) => sum + scene.imageCount, 0)
+      : 0;
+    const totalVideos = productOutputFormats.includes('video') ? selectedScenes.length : 0;
+    const total = totalImages + totalVideos;
+    let completed = 0;
+
+    setProductGenerationProgress({ current: 0, total });
+
+    const results: ProductResultItem[] = [];
+
+    try {
+      for (const scene of selectedScenes) {
+        const category = getCategoryById(scene.categoryId);
+        if (!category) continue;
+
+        // Generate images for this scene
+        if (productOutputFormats.includes('image')) {
+          for (let i = 0; i < scene.imageCount; i++) {
+            try {
+              // Use first variation or custom prompt
+              const variation = category.variations[i % category.variations.length];
+
+              const response = await fetch('/api/product-placement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  productImage: extractedProduct,
+                  categoryId: scene.categoryId,
+                  variationId: variation?.id,
+                  customPrompt: scene.customPrompt,
+                  aspectRatio: aspectRatio.imageAspectRatio,
+                  model: selectedModel,
+                  sessionId,
+                  colorPalette: productColorPalette.length ? productColorPalette : undefined,
+                }),
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                results.push({
+                  id: `${scene.categoryId}-img-${i}-${Date.now()}`,
+                  type: 'image',
+                  url: result.imageUrl || '',
+                  dataUrl: result.imageData,
+                  promptUsed: result.promptUsed,
+                  categoryName: category.name,
+                  variationName: variation?.name,
+                  aspectRatio: aspectRatio.imageAspectRatio,
+                  sceneIndex: selectedScenes.indexOf(scene),
+                  imageIndex: i,
+                });
+              }
+            } catch (error) {
+              console.error('Error generating image:', error);
+            }
+
+            completed++;
+            setProductGenerationProgress({ current: completed, total });
+            // Update results progressively
+            setProductResultItems([...results]);
+          }
+        }
+
+        // Generate video for this scene
+        if (productOutputFormats.includes('video')) {
+          try {
+            // Use first variation for video
+            const variation = category.variations[0];
+
+            const response = await fetch('/api/product-video', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productImage: extractedProduct,
+                categoryId: scene.categoryId,
+                variationId: variation?.id,
+                customPrompt: scene.customPrompt,
+                aspectRatio: aspectRatio.videoAspectRatio || '9:16',
+                colorPalette: productColorPalette.length ? productColorPalette : undefined,
+                sessionId,
+              }),
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              results.push({
+                id: `${scene.categoryId}-video-${Date.now()}`,
+                type: 'video',
+                url: result.videoUrl || '',
+                promptUsed: result.promptUsed,
+                categoryName: category.name,
+                variationName: variation?.name,
+                aspectRatio: aspectRatio.videoAspectRatio || '9:16',
+                sceneIndex: selectedScenes.indexOf(scene),
+              });
+            } else {
+              console.error('Failed to generate video for scene:', scene.categoryId);
+            }
+          } catch (error) {
+            console.error('Error generating video:', error);
+          }
+
+          completed++;
+          setProductGenerationProgress({ current: completed, total });
+          // Update results progressively
+          setProductResultItems([...results]);
+        }
+      }
+
+      setProductResultItems(results);
+    } catch (error) {
+      console.error('Error in multi-product generation:', error);
+    } finally {
+      setIsGeneratingProduct(false);
+      // Reset progress after a short delay to show completion
+      setTimeout(() => setProductGenerationProgress({ current: 0, total: 0 }), 1000);
+    }
+  };
+
+  const generateInvitations = async () => {
+    if (!invitationCategory || !invitationStyle) return;
+    if (invitationOutputFormats.length === 0) return;
+
+    const plannedImageVariants = invitationVariationModes.length > 0 ? invitationVariationModes.length : invitationVariantCount;
+    const total = (invitationOutputFormats.includes('image') ? plannedImageVariants : 0) +
+      (invitationOutputFormats.includes('video') ? 1 : 0);
+
+    setIsGeneratingInvitation(true);
+    setInvitationResults([]);
+    setInvitationGenerationProgress({ current: 0, total });
+
+    let completed = 0;
+    const newResults: InvitationResultItem[] = [];
+
+    try {
+      if (invitationOutputFormats.includes('image')) {
+        const response = await fetch('/api/invitation-generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventDetails,
+            categoryId: invitationCategory.id,
+            styleId: invitationStyle.id,
+            aspectRatio: invitationAspectRatio,
+            variantCount: plannedImageVariants,
+            model: selectedModel,
+            templateId: selectedInvitationTemplate || undefined,
+            colorPalette: appliedInvitationColors ?? [],
+            variationModes: invitationVariationModes,
+            sessionId,
+          }),
+        });
+
+        const data: InvitationGenerationResponse = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to generate invitations');
+        }
+
+        const imageResults = data.results ?? [];
+        imageResults.forEach((result, index) => {
+          newResults.push({
+            id: result.id || `invitation-${Date.now()}-${index}`,
+            type: 'image',
+            url: result.imageUrl || result.imageData,
+            dataUrl: result.imageData || result.imageUrl,
+            promptUsed: result.promptUsed,
+            categoryName: result.categoryName || invitationCategory.name,
+            styleName: result.styleName || invitationStyle.name,
+            aspectRatio: invitationAspectRatio,
+            formatLabel: 'Image',
+          });
+        });
+
+        completed += imageResults.length;
+        setInvitationGenerationProgress({ current: completed, total });
+        setInvitationResults([...newResults]);
+      }
+
+      if (invitationOutputFormats.includes('video')) {
+        const response = await fetch('/api/invitation-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventDetails,
+            categoryId: invitationCategory.id,
+            styleId: invitationStyle.id,
+            aspectRatio: invitationAspectRatio,
+            sessionId,
+          }),
+        });
+
+        const data: InvitationVideoResponse = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to generate invitation video');
+        }
+
+        newResults.push({
+          id: data.id || `invitation-video-${Date.now()}`,
+          type: 'video',
+          url: data.videoUrl,
+          dataUrl: data.videoUrl,
+          promptUsed: data.promptUsed,
+          categoryName: data.categoryName || invitationCategory.name,
+          styleName: data.styleName || invitationStyle.name,
+          aspectRatio: invitationAspectRatio,
+          formatLabel: 'Video',
+        });
+
+        completed += 1;
+        setInvitationGenerationProgress({ current: completed, total });
+        setInvitationResults([...newResults]);
+      }
+    } catch (error) {
+      console.error('Error generating invitations:', error);
+      alert(error instanceof Error ? error.message : 'Failed to generate invitations. Please try again.');
+    } finally {
+      setIsGeneratingInvitation(false);
+      setTimeout(() => setInvitationGenerationProgress({ current: 0, total: 0 }), 1000);
     }
   };
 
@@ -378,7 +933,13 @@ export default function HomePage() {
           transition={{ duration: 0.6 }}
           className="text-center mb-12 relative"
         >
-          <div className="absolute top-0 right-0">
+          <div className="absolute top-0 right-0 flex items-center gap-4">
+            <ModelToggle
+              model={selectedModel}
+              onChange={setSelectedModel}
+              disabled={isGenerating || isGeneratingProduct || isGeneratingInvitation}
+              size="sm"
+            />
             <ThemeToggle />
           </div>
           <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent mb-4">
@@ -396,10 +957,10 @@ export default function HomePage() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="mb-8"
         >
-          <ProductModeToggle
+          <ModeToggle
             mode={appMode}
             onChange={handleModeChange}
-            disabled={isGenerating || isGeneratingProduct}
+            disabled={isGenerating || isGeneratingProduct || isGeneratingInvitation}
           />
         </motion.div>
 
@@ -438,21 +999,33 @@ export default function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  1. Choose Your Inspiration Image
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ImageUpload
-                  onImageSelect={setCurrentImage}
-                  currentImage={currentImage}
-                />
-              </CardContent>
-            </Card>
-          </motion.div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Palette className="h-5 w-5" />
+                    1. Choose Your Inspiration Image
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ImageUpload
+                    onImageSelect={setCurrentImage}
+                    currentImage={currentImage}
+                  />
+                  {sessionId && (
+                    <Button
+                      variant="outline"
+                      className="mt-3 w-full"
+                      onClick={() => {
+                        setAssetPickerTarget('color');
+                        setIsAssetLibraryOpen(true);
+                      }}
+                    >
+                      Browse Saved Assets
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
           {/* Color Palette Display */}
           {palette && (
@@ -475,6 +1048,18 @@ export default function HomePage() {
                         <Palette className="h-4 w-4 mr-2" />
                         {showPalettePlayground ? 'Hide' : 'Edit'} Colors
                       </Button>
+                      {sessionId && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setInvitationColorPalette((palette?.palette || []).map((entry: PaletteEntry) => entry.hex));
+                            setAppMode('invitation');
+                          }}
+                        >
+                          Apply to Invitations
+                        </Button>
+                      )}
                       {results && (
                         <Button
                           variant="outline"
@@ -839,14 +1424,14 @@ export default function HomePage() {
               />
 
               {/* Session Sharing */}
-              {results && palette && (
+              {results && palette && sessionId && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.3 }}
                 >
                   <SessionSharing
-                    sessionId={sessionId}
+                    sessionId={sessionId!}
                     palette={palette}
                     creativePath={selectedPath}
                     result={results}
@@ -859,9 +1444,336 @@ export default function HomePage() {
           </>
         )}
 
+        {/* INVITATION MODE */}
+        {appMode === 'invitation' && (
+          <>
+            {!eventDetails.title && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.05 }}
+                className="mb-10"
+              >
+                <InvitationJourneyShowcase />
+              </motion.div>
+            )}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="mb-8"
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-rose-500" />
+                    1. Event Details
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Share the essentials so the AI can personalize your invitation copy and layout.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <EventDetailsForm
+                    value={eventDetails}
+                    onChange={setEventDetails}
+                    disabled={isGeneratingInvitation}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="mb-8"
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-indigo-500" />
+                    2. Choose Event Category
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Pick the event type to unlock curated style palettes and prompts.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <InvitationCategorySelector
+                    categories={INVITATION_CATEGORIES}
+                    selectedCategoryId={selectedInvitationCategory}
+                    onSelectCategory={handleInvitationCategorySelect}
+                    disabled={isGeneratingInvitation}
+                  />
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {invitationCategory && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>3. Select Style & Mood</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Choose a visual direction to guide the AI prompt.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <InvitationStylePanel
+                      styles={invitationCategory.styles}
+                      selectedStyleId={selectedInvitationStyle}
+                      onSelectStyle={handleInvitationStyleSelect}
+                      disabled={isGeneratingInvitation}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {invitationStyle && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>4. Template & Color Direction</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Layer templates, palettes, and variation cues for more diverse outputs.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <InvitationTemplateGallery
+                      templates={getTemplatesForCategory(invitationCategory?.id || '')}
+                      selectedTemplateId={selectedInvitationTemplate}
+                      onSelect={(id) =>
+                        setSelectedInvitationTemplate(prev => (prev === id ? '' : id))
+                      }
+                    />
+                    <InvitationColorSelector
+                      basePalette={invitationStyle.colorScheme}
+                      suggestions={invitationStyle.colorPresets}
+                      value={appliedInvitationColors || []}
+                      onChange={setInvitationColorPalette}
+                    />
+                    <InvitationVariationSelector
+                      variations={INVITATION_VARIATIONS}
+                      selected={invitationVariationModes}
+                      onChange={setInvitationVariationModes}
+                      max={6}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {invitationStyle && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>5. Preview & Generate</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <InvitationPreview
+                        details={eventDetails}
+                        category={invitationCategory}
+                        style={invitationStyle}
+                        aspectRatio={invitationAspectRatio}
+                        outputFormats={invitationOutputFormats}
+                        variantCount={effectiveInvitationVariantCount}
+                        colorPalette={appliedInvitationColors}
+                        templateName={invitationTemplate?.title}
+                      />
+
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-sm font-semibold">Output Formats</p>
+                            <p className="text-xs text-muted-foreground">Choose what to generate</p>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {INVITATION_OUTPUT_OPTIONS.map((option) => {
+                              const isSelected = invitationOutputFormats.includes(option.id);
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  onClick={() => toggleInvitationFormat(option.id)}
+                                  disabled={isGeneratingInvitation}
+                                  className={`
+                                    relative p-4 rounded-2xl border-2 transition-all text-left
+                                    ${isSelected
+                                      ? 'border-transparent text-white'
+                                      : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
+                                    }
+                                    ${isGeneratingInvitation ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}
+                                  `}
+                                >
+                                  {isSelected && (
+                                    <motion.div
+                                      layoutId={`invitation-format-${option.id}`}
+                                      className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${option.accent}`}
+                                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                    />
+                                  )}
+                                  <div className="relative z-10">
+                                    <p className="font-semibold">{option.label}</p>
+                                    <p className="text-xs opacity-80">{option.description}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold">Aspect Ratio</p>
+                          <div className="flex flex-wrap gap-2">
+                            {INVITATION_ASPECT_OPTIONS.map((ratio) => {
+                              const isActive = invitationAspectRatio === ratio;
+                              return (
+                                <button
+                                  key={ratio}
+                                  type="button"
+                                  disabled={isGeneratingInvitation}
+                                  onClick={() => setInvitationAspectRatio(ratio)}
+                                  className={`
+                                    px-3 py-1.5 rounded-full text-sm border transition-colors
+                                    ${isActive
+                                      ? 'border-emerald-500 text-emerald-600 bg-emerald-50 dark:text-emerald-200 dark:bg-emerald-950/40'
+                                      : 'border-slate-200 dark:border-slate-700'
+                                    }
+                                    ${isGeneratingInvitation ? 'opacity-50 cursor-not-allowed' : ''}
+                                  `}
+                                >
+                                  {ratio}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {invitationOutputFormats.includes('image') && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold">Image Variations</p>
+                                {invitationVariationModes.length > 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Variation styles selected: using {effectiveInvitationVariantCount} unique prompts.
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-sm text-muted-foreground">
+                                {effectiveInvitationVariantCount} variations
+                              </span>
+                            </div>
+                            <Slider
+                              value={[invitationVariantCount]}
+                              onValueChange={(value) => setInvitationVariantCount(value[0] ?? invitationVariantCount)}
+                              min={1}
+                              max={5}
+                              step={1}
+                              disabled={isGeneratingInvitation}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <Button
+                            onClick={generateInvitations}
+                            disabled={!canGenerateInvitations || isGeneratingInvitation}
+                            className="w-full bg-gradient-to-r from-rose-500 via-purple-500 to-indigo-500 hover:from-rose-600 hover:to-indigo-600"
+                            size="lg"
+                          >
+                            {isGeneratingInvitation ? (
+                              <>
+                                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                Crafting invitations...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-5 w-5 mr-2" />
+                                Generate Invitation Suite
+                              </>
+                            )}
+                          </Button>
+
+                          {(!eventDetails.title || !eventDetails.date) && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              Add an event title and date to enable generation.
+                            </p>
+                          )}
+                        </div>
+
+                        {isGeneratingInvitation && invitationGenerationProgress.total > 0 && (
+                          <div className="space-y-2">
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                              <motion.div
+                                className="bg-gradient-to-r from-rose-500 to-indigo-500 h-2 rounded-full"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${(invitationGenerationProgress.current / invitationGenerationProgress.total) * 100}%` }}
+                                transition={{ duration: 0.3 }}
+                              />
+                            </div>
+                            <p className="text-sm text-muted-foreground text-center">
+                              Processing {invitationGenerationProgress.current} of {invitationGenerationProgress.total}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {invitationResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+                className="mb-8"
+              >
+                <Card>
+                  <CardContent className="pt-6">
+                    <InvitationResultsGrid results={invitationResults} />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </>
+        )}
+
         {/* PRODUCT PATH MODE */}
         {appMode === 'product' && (
           <>
+            {!productImage && selectedScenes.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.15 }}
+                className="mb-10"
+              >
+                <ProductJourneyShowcase />
+              </motion.div>
+            )}
+
             {/* Product Upload Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -869,25 +1781,37 @@ export default function HomePage() {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="mb-8 max-w-2xl mx-auto"
             >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wand2 className="h-5 w-5 text-purple-600" />
-                    1. Upload Product Image
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ProductUpload
-                    onProductSelect={handleProductSelect}
-                    currentImage={productImage}
-                    extractedImage={extractedProduct}
-                    isExtracting={isExtractingProduct}
-                  />
-                </CardContent>
-              </Card>
-            </motion.div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wand2 className="h-5 w-5 text-purple-600" />
+                      1. Upload Product Image
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductUpload
+                      onProductSelect={handleProductSelect}
+                      currentImage={productImage}
+                      extractedImage={extractedProduct}
+                      isExtracting={isExtractingProduct}
+                    />
+                    {sessionId && (
+                      <Button
+                        variant="outline"
+                        className="mt-3 w-full"
+                        onClick={() => {
+                          setAssetPickerTarget('product');
+                          setIsAssetLibraryOpen(true);
+                        }}
+                      >
+                        Browse Saved Assets
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-            {/* Environment Selection */}
+            {/* Scene Selection - Multi-select */}
             {extractedProduct && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -897,16 +1821,14 @@ export default function HomePage() {
               >
                 <Card>
                   <CardHeader>
-                    <CardTitle>2. Choose Environment Theme</CardTitle>
+                    <CardTitle>2. Select Scenes</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <EnvironmentCategorySelector
-                      selectedCategory={selectedEnvironmentCategory}
-                      onCategoryChange={(categoryId) => {
-                        setSelectedEnvironmentCategory(categoryId);
-                        setSelectedVariation('');
-                        setProductResults(null);
-                      }}
+                      multiSelect={true}
+                      selectedCategories={selectedScenes.map(s => s.categoryId)}
+                      onCategoriesChange={handleScenesChange}
+                      maxSelections={5}
                       disabled={isGeneratingProduct}
                     />
                   </CardContent>
@@ -914,8 +1836,8 @@ export default function HomePage() {
               </motion.div>
             )}
 
-            {/* Environment Customization */}
-            {selectedEnvironmentCategory && (
+            {/* Generation Configuration */}
+            {selectedScenes.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -924,17 +1846,24 @@ export default function HomePage() {
               >
                 <Card>
                   <CardHeader>
-                    <CardTitle>3. Customize Scene</CardTitle>
+                    <CardTitle>3. Configure Generation</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <EnvironmentCustomizationPanel
-                      categoryId={selectedEnvironmentCategory}
-                      selectedVariationId={selectedVariation}
-                      customPrompt={customEnvironmentPrompt}
-                      onVariationChange={setSelectedVariation}
-                      onCustomPromptChange={setCustomEnvironmentPrompt}
+                    <ProductGenerationConfig
+                      selectedScenes={selectedScenes}
+                      onScenesChange={setSelectedScenes}
+                      selectedFormats={productOutputFormats}
+                      onFormatsChange={setProductOutputFormats}
                       disabled={isGeneratingProduct}
                     />
+
+                    <div className="mt-6">
+                      <ProductColorPaletteSelector
+                        value={productColorPalette}
+                        onChange={setProductColorPalette}
+                        disabled={isGeneratingProduct}
+                      />
+                    </div>
 
                     {/* Aspect Ratio Selector */}
                     <div className="mt-6">
@@ -949,31 +1878,48 @@ export default function HomePage() {
                     {/* Generate Button */}
                     <div className="mt-6">
                       <Button
-                        onClick={generateProductPlacement}
-                        disabled={isGeneratingProduct || (!selectedVariation && !customEnvironmentPrompt)}
+                        onClick={generateMultipleProductPlacements}
+                        disabled={isGeneratingProduct || selectedScenes.length === 0 || productOutputFormats.length === 0}
                         className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                         size="lg"
                       >
                         {isGeneratingProduct ? (
                           <>
                             <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                            Generating...
+                            Generating {productGenerationProgress.current}/{productGenerationProgress.total}...
                           </>
                         ) : (
                           <>
                             <Wand2 className="h-5 w-5 mr-2" />
-                            Generate Product Placement
+                            Generate {selectedScenes.reduce((sum, s) => sum + s.imageCount, 0)} Product Placements
                           </>
                         )}
                       </Button>
                     </div>
+
+                    {/* Progress Bar */}
+                    {isGeneratingProduct && productGenerationProgress.total > 0 && (
+                      <div className="mt-4">
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                          <motion.div
+                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(productGenerationProgress.current / productGenerationProgress.total) * 100}%` }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-2 text-center">
+                          Processing image {productGenerationProgress.current} of {productGenerationProgress.total}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
             )}
 
-            {/* Product Results */}
-            {productResults && (
+            {/* Product Results Grid */}
+            {productResultItems.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -982,9 +1928,8 @@ export default function HomePage() {
               >
                 <Card>
                   <CardContent className="pt-6">
-                    <ProductResults
-                      result={productResults}
-                      onRegenerate={generateProductPlacement}
+                    <ProductResultsGrid
+                      results={productResultItems}
                       isRegenerating={isGeneratingProduct}
                     />
                   </CardContent>
@@ -1033,6 +1978,14 @@ export default function HomePage() {
           <p>Powered by Anthropic Claude • Gemini (Nano Banana) • Google Veo 3 • Next.js</p>
         </motion.div>
       </div>
+
+      <AssetLibrarySheet
+        sessionId={sessionId}
+        open={isAssetLibraryOpen}
+        onOpenChange={setIsAssetLibraryOpen}
+        onSelect={handleAssetSelect}
+        filterKind="image"
+      />
     </div>
   );
 }
