@@ -31,6 +31,8 @@ export interface InvitationCategory {
 
 export type InvitationAspectRatio = '4:5' | '3:2' | '1:1' | '9:16' | '16:9';
 
+export const INVITATION_ASPECT_OPTIONS: InvitationAspectRatio[] = ['4:5', '3:2', '1:1', '9:16', '16:9'];
+
 export const INVITATION_CATEGORIES: InvitationCategory[] = [
   {
     id: 'birthday',
